@@ -1,0 +1,17 @@
+#### IDE
+/.project
+/.classpath
+/.buildpath
+/.settings/
+/.idea
+*.iml
+
+
+#### vim
+*~
+*.swp
+*.swo
+
+
+#### GENERAL
+.DS_Store
