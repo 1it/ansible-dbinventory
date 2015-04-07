@@ -1,11 +1,11 @@
 #### IDE
 /.project
+/.pydevproject
 /.classpath
 /.buildpath
 /.settings/
 /.idea
 *.iml
-
 
 #### vim
 *~

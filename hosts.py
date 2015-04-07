@@ -218,9 +218,13 @@ or environment variables (DO_CLIENT_ID and DO_API_KEY)'''
         
         parser.add_argument('--pretty', '-p', action='store_true', help='Pretty-print results')
         
+        
         parser.add_argument('--db-path', '-d', action='store', help='Path to Hosts Database File, defaults to DBINVENTORY_PATH environment variable if set, or "<current working directory>/hosts.sqlite3"')
-        parser.add_argument('--db-secret', '-s', action='store', help='Database Secret Key for host password encryption, defaults to DBINVENTORY_SECRET environment variable')
+        
         parser.add_argument('--db-create', '-c', action='store_true', help='When set, attempt to create the database if it does not already exist')
+        parser.add_argument('--db-export', '-e', action='store_true', help='Export groups, tags, and hosts as JSON')
+        parser.add_argument('--db-import', '-i', action='store', help='Pathname to JSON file containing groups, tags, and hosts to import.')
+        parser.add_argument('--db-secret', '-s', action='store', help='Database Secret Key for host password encryption, defaults to DBINVENTORY_SECRET environment variable')
         
         parser.add_argument('--list', action='store_true', help='List all active Hosts (default: True)')
         parser.add_argument('--host', action='store', help='Get all Ansible inventory variables about a specific Host')
@@ -228,29 +232,6 @@ or environment variables (DO_CLIENT_ID and DO_API_KEY)'''
         parser.add_argument('--manage', '-m', action='store_true', help='Manage Hosts')
         parser.add_argument('--add', '-a', action='store_true', help='Add Host')
        
-       
-       
-       
-       
-       
-        '''
-        parser.add_argument('--all', action='store_true', help='List all DigitalOcean information as JSON')
-        parser.add_argument('--droplets','-d', action='store_true', help='List Droplets as JSON')
-        parser.add_argument('--regions', action='store_true', help='List Regions as JSON')
-        parser.add_argument('--images', action='store_true', help='List Images as JSON')
-        parser.add_argument('--sizes', action='store_true', help='List Sizes as JSON')
-        parser.add_argument('--ssh-keys', action='store_true', help='List SSH keys as JSON')
-        parser.add_argument('--domains', action='store_true',help='List Domains as JSON')
-
-        parser.add_argument('--cache-path', action='store', help='Path to the cache files (default: .)')
-        parser.add_argument('--cache-max_age', action='store', help='Maximum age of the cached items (default: 0)')
-        parser.add_argument('--force-cache', action='store_true', default=False, help='Only use data from the cache')
-        parser.add_argument('--refresh-cache','-r', action='store_true', default=False, help='Force refresh of cache by making API requests to DigitalOcean (default: False - use cache files)')
-
-        parser.add_argument('--env','-e', action='store_true', help='Display DO_CLIENT_ID and DO_API_KEY')
-        
-        '''
-
         self.args = parser.parse_args()
 
         if self.args.db_path: self.db_path = self.args.db_path
@@ -273,10 +254,14 @@ or environment variables (DO_CLIENT_ID and DO_API_KEY)'''
         if not os.path.isfile(self.db_path):
             if(self.args.db_create):
                 self.database_create_tables()
-                self.database_populate()
             else:
                 print "\nDatabase %s does not exist.\n\nSpecify a location, or use --db-create to start a new database" % (self.db_path)
                 sys.exit(-1)
+                
+        
+        if self.args.db_import:
+            self.database_import(self.args.db_import)
+        
                 
         return self.database_get_session()
     
@@ -297,58 +282,88 @@ or environment variables (DO_CLIENT_ID and DO_API_KEY)'''
         return self.db_engine 
     
     # initial tags & groups
-    def database_populate(self):
+    def database_import(self, filename):
         
-        groups = {
-            'client': {
-                'type': 'select',
-                'tags': ['BAR', 'SIG']},
-            'team': {
-                'type': 'select',
-                'tags': ['bin', 'dec', 'hex', 'oct']},
-            'boolean': {
-                'type': 'checkbox',
-                'tags': ['sla']},
-            'role': {
-                'type': 'multiselect',
-                'tags': ['magento', 'mysql', 'redis', 'solr', 'nfs', 'magento-admin']}
-        }
+        if not os.path.isfile(filename):
+            filename = os.path.dirname(os.path.realpath(__file__)) + filename
+            if not os.path.isfile(filename):
+                print "\nImport File '%s' does not exist." % (filename)
+                sys.exit(-1)
         
-        db = self.database_get_session()
-        
-        for group_name, group in groups.iteritems():
+        with open(filename) as data_file:    
+            data = json.load(data_file)
             
-            Record = TagGroup(name=group_name, selection_type=group['type'])
-            tags = []
+        
+        for key in ['groups','tags','hosts']:
+            if key in data:
+                method = getattr(self,"add_" + key[:-1])
+                for obj in data[key]:
+                    method(obj)
+        
+        return
+    
+    
+    def add_group(self, obj):
+        Record = self.get_group(name=obj['name'])
+        
+        if not Record:
+            db = self.database_get_session()
+            Record = TagGroup(name=obj['name'], selection_type=obj['type'])
+            db.add(Record)
+            db.commit()
+    
+        return Record
+    
+    def add_host(self, obj):
+        Record = self.get_host(host=obj['host'])
+        
+        if not Record:
+            db = self.database_get_session()
+            Record = Host(host=obj['host'])
             
-            for tag in group['tags']:
-                tags.append(Tag(name=tag))
-                
-            Record.tags = tags
+            for key in ['host_name','ssh_user','ssh_port']:
+                if key in obj:
+                    setattr(Record,key,obj[key])
             
             db.add(Record)
             db.commit()
+            
+        if 'tags' in obj:
+            db = self.database_get_session()
+            for tag_name in obj['tags']:
+                TagRecord = self.get_tag(name=tag_name)
+                if TagRecord:
+                    Record.tags.append(TagRecord)
+            db.commit()
+    
+        return Record
+    
+    def add_tag(self, obj):
+        Record = self.get_tag(name=obj['name'])
+        group = self.get_group(name=obj['group'])
         
-        return
+        if not group:
+            print "could not add tag `%s`, group `%s` not found" % (obj['name'], obj['group'])
+            sys.exit(-1)
         
         
-    # initial tags
-    def database_populate_tags(self):
-        return
-        
-        
-        
-        
-        
+        if not Record:
+            db = self.database_get_session()
+            Record = Tag(name=obj['name'],group_id=group.id)
+            db.add(Record)
+            db.commit()
+            
+        return Record
     
+   
+    def get_group(self, **kwargs):
+        return self.database_get_session().query(TagGroup).filter_by(**kwargs).first()
     
-    
-    
-    
-    
-    
-    
-    
+    def get_host(self, **kwargs):
+        return self.database_get_session().query(Host).filter_by(**kwargs).first()
+            
+    def get_tag(self, **kwargs):
+        return self.database_get_session().query(Tag).filter_by(**kwargs).first()
     
 
     def load_all_data_from_digital_ocean(self):
@@ -565,6 +580,9 @@ class Host(Base):
     
     host = Column(String)
     host_name = Column(String)
+    ssh_user = Column(String)
+    ssh_port = Column(Integer)
+    
     
     
 class Tag(Base):
