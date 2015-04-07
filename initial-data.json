@@ -1,7 +1,7 @@
 {
    "groups":[
       {
-         "name":"client",
+         "name":"client_code",
          "type":"select"
       },
       {
@@ -20,11 +20,11 @@
    "tags":[
       {
          "name":"ACME",
-         "group":"client"
+         "group":"client_code"
       },
       {
          "name":"EMCA",
-         "group":"client"
+         "group":"client_code"
       },
       {
          "name":"bin",

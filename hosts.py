@@ -43,13 +43,19 @@ except ImportError, e:
     print "failed=True msg='`sqlalchemy` library required for this script'"
     sys.exit(1)
 
-
 try:
     from Crypto.Cipher import AES
 except ImportError, e:
     print "failed=True msg='`pycrypto` library required for this script'"
     sys.exit(1)
     
+try:
+    import npyscreen
+    import curses
+    UI_ENABLED = True
+except ImportError, e:
+    UI_ENABLED = False
+    pass
 
 
 class BlueAcornInventory(object):
@@ -76,8 +82,16 @@ class BlueAcornInventory(object):
         self.db_session = None
         self.database_initialize()
         
-        sys.exit(0)
-
+        # initialize UI
+        self.ui = None
+        
+        if self.args.add_group:
+            self.ui_add_group(self.args.add_group)
+            
+        if self.args.add_host:
+            self.ui_add_host(self.args.add_host)
+        
+        sys.exit()
 
 
     ###########################################################################
@@ -108,17 +122,22 @@ class BlueAcornInventory(object):
         parser.add_argument('--list', action='store_true', help='List all active Hosts (default: True)')
         parser.add_argument('--host', action='store', help='Get all Ansible inventory variables about a specific Host')
 
-        parser.add_argument('--manage', '-m', action='store_true', help='Manage Hosts')
-        parser.add_argument('--add', '-a', action='store_true', help='Add Host')
+
+        parser.add_argument('--add-group', action='store', help='Add a Tag Group by Name')
+        parser.add_argument('--add-host', action='store', help='Add a Host by Name')
+        parser.add_argument('--add-tag', action='store', help='Add a Tag by Name')
+        
+        parser.add_argument('--del-group', action='store', help='Remove a Tag Group by Name')
+        parser.add_argument('--del-host', action='store', help='Remove a Host by Name')
+        parser.add_argument('--del-tag', action='store', help='Remove a Tag by Name')
+        
+        
+        
        
         self.args = parser.parse_args()
 
         if self.args.db_path: self.db_path = self.args.db_path
         if self.args.db_secret: self.db_secret = self.args.db_secret
-
-        # Make --list default if none of the other commands are specified
-        if (not self.args.manage and not self.args.add):
-                self.args.list = True
 
 
     ###########################################################################
@@ -268,6 +287,81 @@ class BlueAcornInventory(object):
     def get_tag(self, **kwargs):
         return self.database_get_session().query(Tag).filter_by(**kwargs).first()
     
+    
+    ###########################################################################
+    # User Interface
+    ###########################################################################
+    
+    def ui_get_form(self, title):
+        
+        if not UI_ENABLED:
+            print "`npyscreen` library is required by this command"
+            sys.exit(-1)
+            
+        if not self.ui:
+            self.ui = npyscreen.NPSApp()
+            self.ui.run()
+            
+            self.ui_form = npyscreen.Form(name=title)
+            
+        return self.ui_form
+
+    def ui_exit(self):
+        curses.endwin()
+        os.system('clear')
+        sys.exit()
+        
+        
+    def ui_add_group(self, group_name):
+        if self.get_group(name=group_name):
+            print "Tag Group `%s` already exists!" % (group_name)
+            sys.exit(-1)
+            
+        
+                
+        form = self.ui_get_form("Add Tag Group")
+        enums = TagGroup.selection_type.property.columns[0].type.enums
+        
+        form.add(npyscreen.TitleText,name="Name:",editable=False,value=group_name)
+        form.add(npyscreen.TitleSelectOne,name="Type:",values=enums)
+        form.edit()
+        self.ui_exit()
+
+
+    def ui_add_host(self, host):
+        if self.get_host(host=host):
+            print "Host `%s` already exists!" % (host)
+            sys.exit(-1)
+            
+        db = self.database_get_session()
+        form = self.ui_get_form("Add Host")
+        
+        
+        form.add(npyscreen.TitleText,name="Name:",editable=False,value=host)
+        
+        
+        for group in db.query(TagGroup):
+            
+            if group.selection_type == 'select':
+                
+                tags = []
+                for tag in group.tags:
+                    tags.append(tag.name)
+                
+                tags.sort()
+                form.add(npyscreen.TitleSelectOne,name=group.name + ":",values=tags,max_height=10, scroll_exit=True)
+            
+        
+        
+        form.edit()
+        self.ui_exit()
+
+        
+        
+        
+            
+            #pprint(TagGroup.selection_type.property.columns[0].type.enums)
+        
 
 
 ###########################################################################
@@ -315,7 +409,5 @@ class HostTagMap(Base):
     tag_id = Column(Integer, ForeignKey('tag.id'), primary_key=True)
     
 
-
-###########################################################################
 # Run the script
 BlueAcornInventory()
