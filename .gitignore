@@ -1,3 +1,6 @@
+#### host database
+hosts.sqlite3
+
 #### IDE
 /.project
 /.pydevproject

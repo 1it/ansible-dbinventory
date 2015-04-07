@@ -144,7 +144,6 @@ class BlueAcornInventory(object):
         self.db_session = None
         self.database_initialize()
         
-        
         sys.exit(0)
 
 
@@ -261,6 +260,11 @@ or environment variables (DO_CLIENT_ID and DO_API_KEY)'''
         
         if self.args.db_import:
             self.database_import(self.args.db_import)
+            
+            
+        if self.args.db_export:
+            self.database_export()
+            sys.exit(0)
         
                 
         return self.database_get_session()
@@ -281,7 +285,6 @@ or environment variables (DO_CLIENT_ID and DO_API_KEY)'''
         
         return self.db_engine 
     
-    # initial tags & groups
     def database_import(self, filename):
         
         if not os.path.isfile(filename):
@@ -294,13 +297,39 @@ or environment variables (DO_CLIENT_ID and DO_API_KEY)'''
             data = json.load(data_file)
             
         
-        for key in ['groups','tags','hosts']:
+        for key in ['groups', 'tags', 'hosts']:
             if key in data:
-                method = getattr(self,"add_" + key[:-1])
+                method = getattr(self, "add_" + key[:-1])
                 for obj in data[key]:
                     method(obj)
         
         return
+    
+    def database_export(self):
+        
+        output = {"groups": [], "tags": [], "hosts": []}
+        db = self.database_get_session()
+        
+        for group in db.query(TagGroup):
+            output['groups'].append({"name": group.name, "type": group.selection_type})
+            
+        for tag in db.query(Tag):
+            output['tags'].append({"name": tag.name, "group": tag.group.name})
+
+        for host in db.query(Host):
+            tags = []
+            for tag in host.tags:
+                tags.append(tag.name)
+                            
+            output['hosts'].append({"host": host.host, "host_name": host.host_name, "ssh_user": host.ssh_user, "ssh_port": host.ssh_port, "tags": tags})
+                
+
+        print json.dumps(output)
+         
+        
+        
+        
+        
     
     
     def add_group(self, obj):
@@ -321,9 +350,9 @@ or environment variables (DO_CLIENT_ID and DO_API_KEY)'''
             db = self.database_get_session()
             Record = Host(host=obj['host'])
             
-            for key in ['host_name','ssh_user','ssh_port']:
+            for key in ['host_name', 'ssh_user', 'ssh_port']:
                 if key in obj:
-                    setattr(Record,key,obj[key])
+                    setattr(Record, key, obj[key])
             
             db.add(Record)
             db.commit()
@@ -349,7 +378,7 @@ or environment variables (DO_CLIENT_ID and DO_API_KEY)'''
         
         if not Record:
             db = self.database_get_session()
-            Record = Tag(name=obj['name'],group_id=group.id)
+            Record = Tag(name=obj['name'], group_id=group.id)
             db.add(Record)
             db.commit()
             
@@ -598,7 +627,7 @@ class TagGroup(Base):
     __tablename__ = 'tag_group'
     
     id = Column(Integer, primary_key=True)
-    tags = relationship("Tag")
+    tags = relationship("Tag", backref="group")
     
     name = Column(String)
     selection_type = Column(Enum('checkbox', 'select', 'multiselect', name='tag_group_types'))
