@@ -344,11 +344,10 @@ class BlueAcornInventory(object):
             
             if group.selection_type == 'select':
                 
-                tags = []
-                for tag in group.tags:
-                    tags.append(tag.name)
                 
-                tags.sort()
+                tags = [tag.name for tag in group.tags]
+                
+                #tags.sort()
                 form.add(npyscreen.TitleSelectOne,name=group.name + ":",values=tags,max_height=10, scroll_exit=True)
             
         
@@ -381,6 +380,7 @@ class Host(Base):
     ssh_user = Column(String)
     ssh_port = Column(Integer)
     
+    __mapper_args__ = {"order_by": host}
     
     
 class Tag(Base):
@@ -391,6 +391,7 @@ class Tag(Base):
     
     name = Column(String)
     
+    __mapper_args__ = {"order_by": name}
     
 class TagGroup(Base):
     __tablename__ = 'tag_group'
@@ -400,6 +401,8 @@ class TagGroup(Base):
     
     name = Column(String)
     selection_type = Column(Enum('checkbox', 'select', 'multiselect', name='tag_group_types'))
+    
+    __mapper_args__ = {"order_by": name}
     
      
 class HostTagMap(Base):
