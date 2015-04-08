@@ -341,16 +341,22 @@ class BlueAcornInventory(object):
         
         
         for group in db.query(TagGroup):
+            tags = [tag.name for tag in group.tags]
+            prompt = group.name + ':'
+            height = min(10, len(tags)) + 1 
+            
             
             if group.selection_type == 'select':
-                
-                
-                tags = [tag.name for tag in group.tags]
-                
-                #tags.sort()
-                form.add(npyscreen.TitleSelectOne,name=group.name + ":",values=tags,max_height=10, scroll_exit=True)
+                form.add(npyscreen.TitleSelectOne,name=prompt,values=tags,max_height=height)
             
-        
+            elif group.selection_type == 'multiselect':
+                form.add(npyscreen.TitleMultiSelect,name=prompt,values=tags,max_height=height)
+                
+            elif group.selection_type == 'checkbox':
+                for tag_name in tags:
+                    form.add(npyscreen.CheckBox,value=False,name=tag_name)
+                
+            
         
         form.edit()
         self.ui_exit()

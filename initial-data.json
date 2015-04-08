@@ -6,7 +6,7 @@
       },
       {
          "name":"team",
-         "type":"select"
+         "type":"multiselect"
       },
       {
          "name":"boolean",
@@ -44,6 +44,10 @@
       },
       {
          "name":"sla",
+         "group":"boolean"
+      },
+      {
+         "name":"sla2",
          "group":"boolean"
       },
       {
