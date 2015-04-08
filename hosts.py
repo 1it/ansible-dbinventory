@@ -444,21 +444,19 @@ if UI_ENABLED:
             self.add_field('ssh_user','SSH User:', npyscreen.TitleText)
             self.add_field('ssh_port','SSH Port:', npyscreen.TitleText)
             
+            db = self.parentApp.db
             
-            for group in self.parentApp.db.query(TagGroup):
+            #for group in db.query(TagGroup).filter(TagGroup.selection_type.in_(['select','multiselect'])):
+            for group in db.query(TagGroup):
                 tags = [tag.name for tag in group.tags]
                 prompt = group.name + ':'
-                height = min(10, len(tags)) + 1 
+                height = min(10, len(tags)) + 1
+                field_class = npyscreen.TitleSelectOne if group.selection_type == 'select' else npyscreen.TitleMultiSelect
                 
-                if group.selection_type == 'select':
-                    self.add_field(group.name, group.name + ':', npyscreen.TitleSelectOne, values=tags,max_height=height)
                 
-                elif group.selection_type == 'multiselect':
-                    self.add_field(group.name, group.name + ':', npyscreen.TitleSelectOne, values=tags,max_height=height)
-                    
-                elif group.selection_type == 'checkbox':
-                    for tag_name in tags:
-                        self.add(npyscreen.CheckBox,value=False,name=tag_name)
+                self.add_field(group.name, group.name + ':', field_class, values=tags,max_height=height)
+                
+
                         
         def on_ok(self):
             type = self.widget_group.get_selected_objects()
@@ -511,7 +509,8 @@ class TagGroup(Base):
     tags = relationship("Tag", backref="group")
     
     name = Column(String)
-    selection_type = Column(Enum('checkbox', 'select', 'multiselect', name='tag_group_types'))
+    #selection_type = Column(Enum('checkbox', 'select', 'multiselect', name='tag_group_types'))
+    selection_type = Column(Enum('select', 'multiselect', name='tag_group_types'))
     
     __mapper_args__ = {"order_by": name}
     

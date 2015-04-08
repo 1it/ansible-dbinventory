@@ -6,11 +6,11 @@
       },
       {
          "name":"team",
-         "type":"multiselect"
+         "type":"select"
       },
       {
-         "name":"boolean",
-         "type":"checkbox"
+         "name":"meta",
+         "type":"multiselect"
       },
       {
          "name":"role",
@@ -44,11 +44,11 @@
       },
       {
          "name":"sla",
-         "group":"boolean"
+         "group":"meta"
       },
       {
          "name":"sla2",
-         "group":"boolean"
+         "group":"meta"
       },
       {
          "name":"magento",
