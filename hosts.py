@@ -54,7 +54,6 @@ try:
     UI_ENABLED = True
 except ImportError, e:
     UI_ENABLED = False
-    pass
 
 
 class BlueAcornInventory(object):
@@ -312,8 +311,8 @@ class BlueAcornInventory(object):
             print "`npyscreen` library is required by this command"
             sys.exit(-1)
             
-        app = UI().setController(self).setStartForm(form_name,entity_name).run()
-
+        app = UI().start(self, form_name,entity_name)
+        
 
 if UI_ENABLED:
     
@@ -323,65 +322,157 @@ if UI_ENABLED:
             self.addForm('AddHost',UI_AddHostForm, name="Add Host",minimum_lines=30)
             self.addForm('AddTag',UI_AddTagForm, name="Add Tag",minimum_lines=30)
             
-        def setController(self,controller):
+        
+        def start(self, controller, start_form, entity_name):
+            
             self.controller = controller
+            self.db = controller.database_get_session()
             
-            return self
-            
-        def setStartForm(self, fmid, entity_name=None):
-            self.setNextForm(fmid)
-            self.STARTING_FORM = fmid
+            self.setNextForm(start_form)
+            self.STARTING_FORM = start_form
             self.entity_name = entity_name
             
-            return self
+            return self.run()
+            
             
     
-    class UI_Form(npyscreen.Form):
-        def afterEditing(self):
-            self.parentApp.setNextForm(None)
+    class UI_Form(npyscreen.ActionFormMinimal):
+        
+        def __init__(self, *args, **kwargs):
+            self.FIELDS = {}
+            self.REQUIRED_FIELDS = []
+            super(UI_Form,self).__init__(*args, **kwargs)
+        
+        def create(self):
+            self.add_required_field('name', 'Name:', npyscreen.TitleText, value=self.parentApp.entity_name, editable=False)
+        
+        def add_field(self, field_id, prompt, field_class, **kwargs):
+            field = self.add(field_class, name=prompt, **kwargs)
+            self.FIELDS[field_id] = field
+            return field
+            
+        def add_required_field(self, field_id, prompt, *args, **kwargs):
+            self.REQUIRED_FIELDS.append(field_id)
+            prompt = prompt + ' *'
+            
+            field = self.add_field(field_id, prompt, *args, **kwargs)
+            field.labelColor = 'STANDOUT'
+        
+        def on_ok(self):
+            obj = self.get_object_to_add()
+            
+            for required_key in self.REQUIRED_FIELDS:
+                if not obj.get(required_key,False):
+                    npyscreen.notify_confirm('Please complete all required fields')
+                    return
+                
+            if self.add_object(obj):
+                self.parentApp.setNextForm(None)
+                return
+                
+            npyscreen.notify_confirm('Error Adding!')
+                
+            
+        def get_object_to_add(self):
+            
+            obj = {}
+            
+            for key, field in self.FIELDS.iteritems():
+                if isinstance(field,npyscreen.TitleSelectOne) or isinstance(field, npyscreen.SelectOne):
+                    try:
+                        value = field.get_selected_objects()[0]
+                    except:
+                        value = None
+                
+                elif isinstance(field,npyscreen.TitleMultiSelect) or isinstance(field, npyscreen.MultiSelect):
+                    value = field.get_selected_objects()
+                
+                else:
+                    value = field.value
+                    
+                obj[key] = value
+                    
+                    
+            return obj
+        
+        def add_object(self, obj):
+            pass
+                
             
             
     class UI_AddGroupForm(UI_Form):
+        
         def create(self):
-            
-            self.add(npyscreen.TitleText,name="Name:",editable=False,value=self.parentApp.entity_name)
+            super(self.__class__,self).create()
             
             enums = TagGroup.selection_type.property.columns[0].type.enums
-            self.add(npyscreen.TitleSelectOne,name="Type:",values=enums)
+            self.add_required_field('type','Type:',npyscreen.TitleSelectOne,values=enums)
             
+            
+        def add_object(self,obj):
+            if self.parentApp.controller.add_group(obj):
+                npyscreen.notify_confirm("Added Tag Group `%s`" % (obj['name']))
+                return True
+                
+            return False
+            
+            
+    class UI_AddTagForm(UI_Form):
+        
+        def create(self):
+            super(self.__class__,self).create()
+            
+            groups = [group.name for group in self.parentApp.db.query(TagGroup)]
+            height = min(10, len(groups)) + 1
+            
+            self.add_required_field('group','Group:',npyscreen.TitleSelectOne,values=groups,max_height=height)
+            
+        
+        def add_object(self,obj):
+            if self.parentApp.controller.add_tag(obj):
+                npyscreen.notify_confirm("Added Tag `%s`" % (obj['name']))
+                return True
+                
+            return False
+        
             
     class UI_AddHostForm(UI_Form):
         def create(self):
             
-            self.add(npyscreen.TitleText,name="Name:",editable=False,value=self.parentApp.entity_name)
+            self.add_required_field('host', 'Host:', npyscreen.TitleText, value=self.parentApp.entity_name, editable=False)
+            self.add_field('host_name','Host IP/FQDN:', npyscreen.TitleText)
+            self.add_field('ssh_user','SSH User:', npyscreen.TitleText)
+            self.add_field('ssh_port','SSH Port:', npyscreen.TitleText)
             
-            db = self.parentApp.controller.database_get_session()
-            for group in db.query(TagGroup):
+            
+            for group in self.parentApp.db.query(TagGroup):
                 tags = [tag.name for tag in group.tags]
                 prompt = group.name + ':'
                 height = min(10, len(tags)) + 1 
                 
-                
                 if group.selection_type == 'select':
-                    self.add(npyscreen.TitleSelectOne,name=prompt,values=tags,max_height=height)
+                    self.add_field(group.name, group.name + ':', npyscreen.TitleSelectOne, values=tags,max_height=height)
                 
                 elif group.selection_type == 'multiselect':
-                    self.add(npyscreen.TitleMultiSelect,name=prompt,values=tags,max_height=height)
+                    self.add_field(group.name, group.name + ':', npyscreen.TitleSelectOne, values=tags,max_height=height)
                     
                 elif group.selection_type == 'checkbox':
                     for tag_name in tags:
                         self.add(npyscreen.CheckBox,value=False,name=tag_name)
                         
-    class UI_AddTagForm(UI_Form):
-        def create(self):
+        def on_ok(self):
+            type = self.widget_group.get_selected_objects()
             
-            self.add(npyscreen.TitleText,name="Name:",editable=False,value=self.parentApp.entity_name)
-            
-            db = self.parentApp.controller.database_get_session()
-            groups = [group.name for group in db.query(TagGroup)]
-            height = min(10, len(groups)) + 1
-            
-            self.add(npyscreen.TitleSelectOne,name="Group:",values=groups,max_height=height)
+            if type:
+                obj = {"name": self.parentApp.entity_name,"type": type[0]}
+                # @TODO error handling for failed object creation
+                self.parentApp.controller.add_group(obj)
+                npyscreen.notify_confirm("Added tag `%s`" % (self.parentApp.entity_name))
+                self.KEEP_EDITING = False
+            else:
+                npyscreen.notify_confirm('Please select a Tag Group Selection Type')
+                        
+
             
 ###########################################################################
 # SQLAlachemy Models
