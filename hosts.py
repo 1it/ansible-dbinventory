@@ -106,6 +106,21 @@ class BlueAcornInventory(object):
                 print "Tag `%s` already exists!" % (tag_name)
                 sys.exit(-1)
             self.ui_start('AddTag',tag_name)
+            
+        if self.args.del_group:
+            self.del_group(self.args.del_group)
+            print "Group `%s` deleted." % (self.args.del_group)
+            sys.exit()
+            
+        if self.args.del_tag:
+            self.del_tag(self.args.del_tag)
+            print "Tag `%s` deleted." % (self.args.del_tag)
+            sys.exit()
+            
+        if self.args.del_host:
+            self.del_host(self.args.del_host)
+            print "Host `%s` deleted." % (self.args.del_host)
+            sys.exit()
            
         
         sys.exit()
@@ -301,6 +316,41 @@ class BlueAcornInventory(object):
             db.commit()
             
         return Record
+    
+    
+    def del_group(self, name):
+        obj = self.get_group(name=name)
+        
+        if not obj:
+            print "group `%s` not found" % (name)
+            sys.exit(-1)
+        
+        return self.del_obj(obj)
+        
+    def del_tag(self, name):
+        obj = self.get_tag(name=name)
+        
+        if not obj:
+            print "tag `%s` not found" % (name)
+            sys.exit(-1)
+        
+        return self.del_obj(obj)
+    
+    def del_host(self, name):
+        obj = self.get_host(host=name)
+        
+        if not obj:
+            print "host `%s` not found" % (name)
+            sys.exit(-1)
+        
+        return self.del_obj(obj)
+    
+    def del_obj(self, instance):
+        db = self.database_get_session()
+        db.delete(instance)
+        db.commit()
+        
+    
     
    
     def get_group(self, **kwargs):
@@ -544,6 +594,8 @@ def aes_decrypt(data):
 ###########################################################################
 # SQLAlachemy Models
 ###########################################################################
+
+#@TODO - cascade deletions
 
 Base = declarative_base()
 
