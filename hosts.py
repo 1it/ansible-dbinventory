@@ -502,11 +502,21 @@ if UI_ENABLED:
                 field_class = npyscreen.TitleSelectOne if group.selection_type == 'select' else npyscreen.TitleMultiSelect
                 
                 
-                self.add_field(group.name, group.name + ':', field_class, values=tags,max_height=height)
+                self.add_field('_tag_group_' + group.name, group.name + ':', field_class, values=tags,max_height=height)
                 
                 
         def add_object(self,obj):
-            if self.parentApp.controller.add_host(obj):
+            
+            new_obj = {"tags": []}
+            tag_prefix = '_tag_group_'
+            
+            for key, value in obj.iteritems():
+                if key.startswith(tag_prefix):
+                    new_obj['tags'] += value
+                else:
+                    new_obj[key] = value
+            
+            if self.parentApp.controller.add_host(new_obj):
                 npyscreen.notify_confirm("Added Host `%s`" % (obj['host']))
                 return True
                 
