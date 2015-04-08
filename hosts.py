@@ -16,7 +16,7 @@ Based on https://github.com/geerlingguy/ansible-for-devops/tree/master/dynamic-i
 
 In addition to the --list and --host options used by Ansible, there are options
 for managing and printing passwords. Passwords are stored using AES symmetric
-encryption and can only be retrieved by providing the correct passphrase. 
+encryption and can only be retrieved by providing the correct secret. 
 
 '''
 
@@ -35,7 +35,7 @@ except ImportError:
     import simplejson as json
 
 try:
-    from sqlalchemy import create_engine, Column, Integer, String, Enum, ForeignKey
+    from sqlalchemy import create_engine, Column, Integer, String, Enum, ForeignKey, TypeDecorator
     from sqlalchemy.ext.declarative import declarative_base
     from sqlalchemy.orm import Session
 except ImportError, e:
@@ -44,6 +44,10 @@ except ImportError, e:
 
 try:
     from Crypto.Cipher import AES
+    import hashlib
+    import binascii
+    AES_KEY = None
+    
 except ImportError, e:
     print "failed=True msg='`pycrypto` library required for this script'"
     sys.exit(1)
@@ -69,6 +73,7 @@ class BlueAcornInventory(object):
         self.data = {}  # All DigitalOcean data
         self.inventory = {}  # Ansible Inventory
         self.index = {}  # Various indices of Droplet metadata
+        self.db_secret = None
         
          # Read settings, environment variables, and CLI arguments
         self.read_environment()
@@ -171,14 +176,20 @@ class BlueAcornInventory(object):
         
         if self.args.db_import:
             self.database_import(self.args.db_import)
+            print "imported data."
+            sys.exit(0)
             
             
         if self.args.db_export:
             print json.dumps(self.database_export())
             sys.exit(0)
-        
-                
+            
+        # toggle encryption/decryption
+        self.set_or_get_passphrase()
+            
         return self.database_get_session()
+    
+    
     
     def database_create_tables(self):
         engine = self.database_get_engine()
@@ -206,6 +217,7 @@ class BlueAcornInventory(object):
         
         with open(filename) as data_file:    
             data = json.load(data_file)
+        data_file.close()
             
         
         for key in ['groups', 'tags', 'hosts']:
@@ -215,6 +227,7 @@ class BlueAcornInventory(object):
                     method(obj)
         
         return
+    
     
     def database_export(self):
         
@@ -255,7 +268,7 @@ class BlueAcornInventory(object):
             db = self.database_get_session()
             Record = Host(host=obj['host'])
             
-            for key in ['host_name', 'ssh_user', 'ssh_port']:
+            for key in ['host_name', 'ssh_user', 'ssh_port', 'ssh_pass','sudo_pass']:
                 if key in obj:
                     setattr(Record, key, obj[key])
             
@@ -299,8 +312,35 @@ class BlueAcornInventory(object):
     def get_tag(self, **kwargs):
         return self.database_get_session().query(Tag).filter_by(**kwargs).first()
     
-    
+
+    def set_or_get_passphrase(self):
         
+        if not self.db_secret:
+            return False
+        
+        global AES_KEY
+        
+        AES_KEY = hashlib.sha256(self.db_secret).digest()
+        db = self.database_get_session()
+        
+        config_name = 'passphrase'
+        expected_value = 'secret!'
+        encrypted_value = aes_encrypt(expected_value)
+        
+        row = db.query(Config).filter_by(name=config_name).first()
+        
+        if not row:
+            Record = Config(name=config_name, value=encrypted_value)
+            db.add(Record)
+            db.commit()
+        
+        elif aes_decrypt(row.value) != expected_value:
+            print "this database is protected with a different passphrase -- please provide the correct one!"
+            sys.exit(-1) 
+            
+        return AES_KEY
+        
+    
         
 ###########################################################################
 # User Interface
@@ -393,6 +433,7 @@ if UI_ENABLED:
                 obj[key] = value
                     
                     
+            #npyscreen.notify_confirm("obj: %s" % (obj))
             return obj
         
         def add_object(self, obj):
@@ -423,7 +464,7 @@ if UI_ENABLED:
             super(self.__class__,self).create()
             
             groups = [group.name for group in self.parentApp.db.query(TagGroup)]
-            height = min(10, len(groups)) + 1
+            height = min(10, len(groups)) + 2
             
             self.add_required_field('group','Group:',npyscreen.TitleSelectOne,values=groups,max_height=height)
             
@@ -441,8 +482,15 @@ if UI_ENABLED:
             
             self.add_required_field('host', 'Host:', npyscreen.TitleText, value=self.parentApp.entity_name, editable=False)
             self.add_field('host_name','Host IP/FQDN:', npyscreen.TitleText)
-            self.add_field('ssh_user','SSH User:', npyscreen.TitleText)
+            self.add_required_field('ssh_user','SSH User:', npyscreen.TitleText)
             self.add_field('ssh_port','SSH Port:', npyscreen.TitleText)
+            
+            
+       
+            self.add_field('ssh_pass','SSH Pass:', npyscreen.TitleText, editable=(AES_KEY))
+            self.add_field('sudo_pass','sudo Pass:', npyscreen.TitleText, editable=(AES_KEY))
+            if not AES_KEY:
+                npyscreen.notify_confirm('Provide a --db-secret if you want to set the ssh_pass and sudo_pass variables.')
             
             db = self.parentApp.db
             
@@ -450,33 +498,54 @@ if UI_ENABLED:
             for group in db.query(TagGroup):
                 tags = [tag.name for tag in group.tags]
                 prompt = group.name + ':'
-                height = min(10, len(tags)) + 1
+                height = min(10, len(tags)) + 2
                 field_class = npyscreen.TitleSelectOne if group.selection_type == 'select' else npyscreen.TitleMultiSelect
                 
                 
                 self.add_field(group.name, group.name + ':', field_class, values=tags,max_height=height)
                 
-
-                        
-        def on_ok(self):
-            type = self.widget_group.get_selected_objects()
-            
-            if type:
-                obj = {"name": self.parentApp.entity_name,"type": type[0]}
-                # @TODO error handling for failed object creation
-                self.parentApp.controller.add_group(obj)
-                npyscreen.notify_confirm("Added tag `%s`" % (self.parentApp.entity_name))
-                self.KEEP_EDITING = False
-            else:
-                npyscreen.notify_confirm('Please select a Tag Group Selection Type')
+                
+        def add_object(self,obj):
+            if self.parentApp.controller.add_host(obj):
+                npyscreen.notify_confirm("Added Host `%s`" % (obj['host']))
+                return True
+                
+                
                         
 
+
+
+###########################################################################
+# Utility
+###########################################################################
+def aes_encrypt(data):
+    if data and (AES_KEY):
+        cipher = AES.new(AES_KEY)
+        data = data + (" " * (16 - (len(data) % 16)))
+        return binascii.hexlify(cipher.encrypt(data))
+
+def aes_decrypt(data):
+    if data and AES_KEY:
+        cipher = AES.new(AES_KEY)
+        return cipher.decrypt(binascii.unhexlify(data)).rstrip()
+
+    
             
 ###########################################################################
 # SQLAlachemy Models
 ###########################################################################
 
 Base = declarative_base()
+
+class EncryptedValue(TypeDecorator):
+    impl = String
+
+    def process_bind_param(self, value, dialect):
+        return aes_encrypt(value)
+
+    def process_result_value(self, value, dialect):
+        return aes_decrypt(value)
+    
 
 class Host(Base):
     __tablename__ = 'host'
@@ -488,6 +557,8 @@ class Host(Base):
     host_name = Column(String)
     ssh_user = Column(String)
     ssh_port = Column(Integer)
+    ssh_pass = Column("encrypted_ssh_pass", EncryptedValue(40), nullable=True)
+    sudo_pass = Column("encrypted_sudo_pass", EncryptedValue(40), nullable=True)
     
     __mapper_args__ = {"order_by": host}
     
@@ -521,6 +592,15 @@ class HostTagMap(Base):
     host_id = Column(Integer, ForeignKey('host.id'), primary_key=True)
     tag_id = Column(Integer, ForeignKey('tag.id'), primary_key=True)
     
+    
+class Config(Base):
+    __tablename__ = 'config'
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True)
+    value = Column(String)
 
+
+    
 # Run the script
 BlueAcornInventory()

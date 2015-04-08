@@ -6,7 +6,7 @@
       },
       {
          "name":"team",
-         "type":"select"
+         "type":"multiselect"
       },
       {
          "name":"meta",
