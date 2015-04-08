@@ -2,7 +2,6 @@
 from pprint import pprint
 from sqlalchemy.orm import relationship
 
-
 # blueacorn host manager 
 # https://bitbucket.org/zzzeek/sqlalchemy/wiki/UsageRecipes/SymmetricEncryption
 
@@ -83,13 +82,20 @@ class BlueAcornInventory(object):
         self.database_initialize()
         
         # initialize UI
-        self.ui = None
-        
         if self.args.add_group:
-            self.ui_add_group(self.args.add_group)
+            group_name = self.args.add_group
+            if self.get_group(name=group_name):
+                print "Tag Group `%s` already exists!" % (group_name)
+                sys.exit(-1)
+            self.ui_start('AddGroup',group_name)
+
             
         if self.args.add_host:
-            self.ui_add_host(self.args.add_host)
+            host = self.args.add_host
+            if self.get_host(host=host):
+                print "Host `%s` already exists!" % (host)
+                sys.exit(-1)
+            self.ui_start('AddHost',host)
         
         sys.exit()
 
@@ -288,87 +294,78 @@ class BlueAcornInventory(object):
         return self.database_get_session().query(Tag).filter_by(**kwargs).first()
     
     
-    ###########################################################################
-    # User Interface
-    ###########################################################################
-    
-    def ui_get_form(self, title):
         
+        
+###########################################################################
+# User Interface
+###########################################################################
+
+    def ui_start(self, form_name, entity_name=None):
         if not UI_ENABLED:
             print "`npyscreen` library is required by this command"
             sys.exit(-1)
             
-        if not self.ui:
-            self.ui = npyscreen.NPSApp()
-            self.ui.run()
-            
-            self.ui_form = npyscreen.Form(name=title)
-            
-        return self.ui_form
+        app = UI().setController(self).setStartForm(form_name,entity_name).run()
 
-    def ui_exit(self):
-        curses.endwin()
-        os.system('clear')
-        sys.exit()
-        
-        
-    def ui_add_group(self, group_name):
-        if self.get_group(name=group_name):
-            print "Tag Group `%s` already exists!" % (group_name)
-            sys.exit(-1)
+
+if UI_ENABLED:
+    
+    class UI(npyscreen.NPSAppManaged):
+        def onStart(self):
+            self.addForm('AddGroup',UI_AddGroupForm, name="Add Tag Group")
+            self.addForm('AddHost',UI_AddHostForm, name="Add Host")
             
-        
+        def setController(self,controller):
+            self.controller = controller
+            
+            return self
+            
+        def setStartForm(self, fmid, entity_name=None):
+            self.setNextForm(fmid)
+            self.STARTING_FORM = fmid
+            self.entity_name = entity_name
+            
+            return self
+            
+    
+    class UI_Form(npyscreen.Form):
+        def afterEditing(self):
+            self.parentApp.setNextForm(None)
+            
+            
+    class UI_AddGroupForm(UI_Form):
+        def create(self):
+            
+            self.add(npyscreen.TitleText,name="Name:",editable=False,value=self.parentApp.entity_name)
+            
+            enums = TagGroup.selection_type.property.columns[0].type.enums
+            self.add(npyscreen.TitleSelectOne,name="Type:",values=enums)
+            
+            
+    class UI_AddHostForm(UI_Form):
+        def create(self):
+            
+            self.add(npyscreen.TitleText,name="Name:",editable=False,value=self.parentApp.entity_name)
+            
+            db = self.parentApp.controller.database_get_session()
+            for group in db.query(TagGroup):
+                tags = [tag.name for tag in group.tags]
+                prompt = group.name + ':'
+                height = min(10, len(tags)) + 1 
                 
-        form = self.ui_get_form("Add Tag Group")
-        enums = TagGroup.selection_type.property.columns[0].type.enums
-        
-        form.add(npyscreen.TitleText,name="Name:",editable=False,value=group_name)
-        form.add(npyscreen.TitleSelectOne,name="Type:",values=enums)
-        form.edit()
-        self.ui_exit()
-
-
-    def ui_add_host(self, host):
-        if self.get_host(host=host):
-            print "Host `%s` already exists!" % (host)
-            sys.exit(-1)
-            
-        db = self.database_get_session()
-        form = self.ui_get_form("Add Host")
-        
-        
-        form.add(npyscreen.TitleText,name="Name:",editable=False,value=host)
-        
-        
-        for group in db.query(TagGroup):
-            tags = [tag.name for tag in group.tags]
-            prompt = group.name + ':'
-            height = min(10, len(tags)) + 1 
-            
-            
-            if group.selection_type == 'select':
-                form.add(npyscreen.TitleSelectOne,name=prompt,values=tags,max_height=height)
-            
-            elif group.selection_type == 'multiselect':
-                form.add(npyscreen.TitleMultiSelect,name=prompt,values=tags,max_height=height)
                 
-            elif group.selection_type == 'checkbox':
-                for tag_name in tags:
-                    form.add(npyscreen.CheckBox,value=False,name=tag_name)
+                if group.selection_type == 'select':
+                    self.add(npyscreen.TitleSelectOne,name=prompt,values=tags,max_height=height)
                 
+                elif group.selection_type == 'multiselect':
+                    self.add(npyscreen.TitleMultiSelect,name=prompt,values=tags,max_height=height)
+                    
+                elif group.selection_type == 'checkbox':
+                    for tag_name in tags:
+                        self.add(npyscreen.CheckBox,value=False,name=tag_name)
             
-        
-        form.edit()
-        self.ui_exit()
-
-        
-        
-        
             
-            #pprint(TagGroup.selection_type.property.columns[0].type.enums)
-        
-
-
+    
 ###########################################################################
 # SQLAlachemy Models
 ###########################################################################
