@@ -89,13 +89,20 @@ class BlueAcornInventory(object):
                 sys.exit(-1)
             self.ui_start('AddGroup',group_name)
 
-            
         if self.args.add_host:
             host = self.args.add_host
             if self.get_host(host=host):
                 print "Host `%s` already exists!" % (host)
                 sys.exit(-1)
             self.ui_start('AddHost',host)
+            
+        if self.args.add_tag:
+            tag_name = self.args.add_tag
+            if self.get_tag(name=tag_name):
+                print "Tag `%s` already exists!" % (tag_name)
+                sys.exit(-1)
+            self.ui_start('AddTag',tag_name)
+           
         
         sys.exit()
 
@@ -313,7 +320,8 @@ if UI_ENABLED:
     class UI(npyscreen.NPSAppManaged):
         def onStart(self):
             self.addForm('AddGroup',UI_AddGroupForm, name="Add Tag Group")
-            self.addForm('AddHost',UI_AddHostForm, name="Add Host")
+            self.addForm('AddHost',UI_AddHostForm, name="Add Host",minimum_lines=30)
+            self.addForm('AddTag',UI_AddTagForm, name="Add Tag",minimum_lines=30)
             
         def setController(self,controller):
             self.controller = controller
@@ -363,9 +371,18 @@ if UI_ENABLED:
                 elif group.selection_type == 'checkbox':
                     for tag_name in tags:
                         self.add(npyscreen.CheckBox,value=False,name=tag_name)
+                        
+    class UI_AddTagForm(UI_Form):
+        def create(self):
             
+            self.add(npyscreen.TitleText,name="Name:",editable=False,value=self.parentApp.entity_name)
             
-    
+            db = self.parentApp.controller.database_get_session()
+            groups = [group.name for group in db.query(TagGroup)]
+            height = min(10, len(groups)) + 1
+            
+            self.add(npyscreen.TitleSelectOne,name="Group:",values=groups,max_height=height)
+            
 ###########################################################################
 # SQLAlachemy Models
 ###########################################################################
