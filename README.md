@@ -20,7 +20,8 @@ OPTIONAL - for curses interface
 Usage
 =====
 
-* Create the initial database
+Create the initial database
+---------------------------
 
 ```
 dbinventory.py --db-create
@@ -34,7 +35,9 @@ dbinventory.py --db-create --db-path=/etc/ansible/hosts.sqlite3
 ```
 
 
-* Bulk import hosts, vars, and tags from a JSON source
+Bulk import hosts, vars, and tags from a JSON source
+----------------------------------------------------
+
 
 ```
 dbinventory.py --db-import /path/to/data.json
@@ -49,7 +52,10 @@ Additionally, you may export the database data in a format that can be imported:
 dbinventory.py --db-export > /path/to/data.json
 ```
 
-* Add a host, tag, or tag group
+
+Add a host, tag, or tag group
+-----------------------------
+
 
 In dbinventory, "Tags" belong to "Tag Groups", and may belong to any number of
 "Hosts". 
@@ -80,6 +86,8 @@ will not appear in results or be editable in forms.
 ```
 db-inventory.py --add-host <Host> --db-secret="super secret password"
 ```
+
+alternatively, use a persistent environment variable
 
 ```
 export DBINVENTORY_SECRET="super secret password"
