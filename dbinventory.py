@@ -594,10 +594,6 @@ if UI_ENABLED:
             if self.parentApp.controller.add_host(new_obj):
                 npyscreen.notify_confirm("Added Host `%s`" % (obj['host']))
                 return True
-                
-                
-                        
-
 
 
 ###########################################################################
