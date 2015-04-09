@@ -68,11 +68,6 @@ class BlueAcornInventory(object):
 
     def __init__(self):
         ''' Main execution path '''
-
-        # BlueAcornInventory data
-        self.data = {}  # All DigitalOcean data
-        self.inventory = {}  # Ansible Inventory
-        self.index = {}  # Various indices of Droplet metadata
         self.db_secret = None
         
          # Read settings, environment variables, and CLI arguments
@@ -122,8 +117,40 @@ class BlueAcornInventory(object):
             print "Host `%s` deleted." % (self.args.del_host)
             sys.exit()
            
+           
+           
+        # --list or --host requested, output ansible-compliant inventory 
+        ################################################################
+        
+        query = self.database_get_session().query(Host)
+        if self.args.host:
+            host = query.filter_by(host=self.args.host).first()
+            inventory = self.get_host_vars(host) if host else {}
+        else:
+            inventory = {}
+            hostvars = {}
+            for host in query:
+                hostvars[host.host] = self.get_host_vars(host)
+                
+                for group in [tag.name for tag in host.tags]:
+                    if group not in inventory:
+                        inventory[group] = []
+                        
+                    inventory[group].append(host.host)
+                
+            inventory['_meta'] = {"hostvars": hostvars}
+        
+        if self.args.pretty:
+            print json.dumps(inventory, sort_keys=True, indent=2)
+        else:
+            print json.dumps(inventory)
+        
         
         sys.exit()
+        
+    def get_host_vars(self, host):
+        return transmorg([host.host_name, host.ssh_user, host.ssh_port, host.ssh_pass, host.sudo_pass], ['ansible_ssh_host', 'ansible_ssh_user', 'ansible_ssh_port','ansible_ssh_pass','ansible_sudo_pass'])
+        
 
 
     ###########################################################################
@@ -164,8 +191,6 @@ class BlueAcornInventory(object):
         parser.add_argument('--del-tag', action='store', help='Remove a Tag by Name')
         
         
-        
-       
         self.args = parser.parse_args()
 
         if self.args.db_path: self.db_path = self.args.db_path
@@ -389,7 +414,7 @@ class BlueAcornInventory(object):
             sys.exit(-1) 
             
         return AES_KEY
-        
+    
     
         
 ###########################################################################
@@ -560,10 +585,11 @@ if UI_ENABLED:
             tag_prefix = '_tag_group_'
             
             for key, value in obj.iteritems():
-                if key.startswith(tag_prefix):
-                    new_obj['tags'] += value
-                else:
-                    new_obj[key] = value
+                if (value):
+                    if key.startswith(tag_prefix):
+                        new_obj['tags'] += value
+                    else:
+                        new_obj[key] = value
             
             if self.parentApp.controller.add_host(new_obj):
                 npyscreen.notify_confirm("Added Host `%s`" % (obj['host']))
@@ -587,7 +613,18 @@ def aes_decrypt(data):
     if data and AES_KEY:
         cipher = AES.new(AES_KEY)
         return cipher.decrypt(binascii.unhexlify(data)).rstrip()
-
+    
+    
+def transmorg(data, keys):
+    
+    output = {}
+    values = [value for value in data]
+    
+    for i, value in enumerate(values):
+        if (value):
+            output[keys[i]] = value
+            
+    return output
     
             
 ###########################################################################
@@ -612,7 +649,7 @@ class Host(Base):
     __tablename__ = 'host'
     
     id = Column(Integer, primary_key=True)
-    tags = relationship('Tag', secondary='host_tag_map')
+    tags = relationship('Tag', secondary='host_tag_map', backref="hosts")
     
     host = Column(String)
     host_name = Column(String)
