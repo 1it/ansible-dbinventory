@@ -144,7 +144,7 @@ class BlueAcornInventory(object):
         parser.add_argument('--pretty', '-p', action='store_true', help='Pretty-print results')
         
         
-        parser.add_argument('--db-path', '-d', action='store', help='Path to Hosts Database File, defaults to DBINVENTORY_PATH environment variable if set, or "<current working directory>/hosts.sqlite3"')
+        parser.add_argument('--db-path', '-d', action='store', help='Path to Hosts Database File, defaults to DBINVENTORY_PATH environment variable if set, or "<current working directory>/.dbinventory.sqlite3"')
         
         parser.add_argument('--db-create', '-c', action='store_true', help='When set, attempt to create the database if it does not already exist')
         parser.add_argument('--db-export', '-e', action='store_true', help='Export groups, tags, and hosts as JSON')
@@ -179,7 +179,7 @@ class BlueAcornInventory(object):
     def database_initialize(self):
         
         if not hasattr(self, 'db_path'):
-            self.db_path = os.path.dirname(os.path.realpath(__file__)) + '/hosts.sqlite3'  
+            self.db_path = os.path.dirname(os.path.realpath(__file__)) + '/.dbinventory.sqlite3'  
             
         if not os.path.isfile(self.db_path):
             if(self.args.db_create):
@@ -550,7 +550,6 @@ if UI_ENABLED:
                 prompt = group.name + ':'
                 height = min(10, len(tags)) + 2
                 field_class = npyscreen.TitleSelectOne if group.selection_type == 'select' else npyscreen.TitleMultiSelect
-                
                 
                 self.add_field('_tag_group_' + group.name, group.name + ':', field_class, values=tags,max_height=height)
                 
