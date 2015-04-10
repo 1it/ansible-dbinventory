@@ -73,6 +73,38 @@ db-inventory.py --add-tag <Tag Name>
 db-inventory.py --add-host <Host>
 ```
 
+SSH Config compatible Output 
+----------------------------
+
+You may use dbinventory to generate ssh config files as well.
+
+```
+db-inventory.py --ssh-config >> ~/.ssh/config
+cat ~/.ssh/config
+##### dbinventory hosts #####
+#############################
+
+## ACME-db1 groups: ACME, dec, mysql
+Host ACME-db1
+HostName 8.8.8.9
+User roadrunner
+
+## ACME-web1 groups: ACME, dec, magento, redis
+Host ACME-web1
+HostName 8.8.8.8
+User roadrunner
+
+## rabbit-web1 groups: bin, magento, sla
+Host rabbit-web1
+User bugs
+
+## rabbit-web2 groups: magento
+Host rabbit-web2
+User bugs 
+```
+
+
+
 Sensitive Data
 --------------
 

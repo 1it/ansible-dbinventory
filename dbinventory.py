@@ -129,18 +129,35 @@ class BlueAcornInventory(object):
         else:
             inventory = {}
             hostvars = {}
+            hostgroups = {}
             for host in query:
                 hostvars[host.host] = self.get_host_vars(host)
+                hostgroups[host.host] = []
                 
                 for group in [tag.name for tag in host.tags]:
                     if group not in inventory:
                         inventory[group] = []
                         
                     inventory[group].append(host.host)
+                    hostgroups[host.host].append(group)
                 
             inventory['_meta'] = {"hostvars": hostvars}
+            
         
-        if self.args.pretty:
+        if self.args.ssh_config:
+            print "##### dbinventory hosts #####"
+            print "#############################"
+            
+            for host, vars in sorted(hostvars.iteritems()):
+                print '\n## %s groups: ' % (host) + ', '.join(hostgroups[host])
+                print "Host %s" % (host)
+                if 'ansible_ssh_host' in vars:
+                    print "HostName %s" % (vars['ansible_ssh_host'])
+                if 'ansible_ssh_user' in vars:
+                    print "User %s" % (vars['ansible_ssh_user'])
+                    
+                
+        elif self.args.pretty:
             print json.dumps(inventory, sort_keys=True, indent=2)
         else:
             print json.dumps(inventory)
@@ -189,6 +206,8 @@ class BlueAcornInventory(object):
         parser.add_argument('--del-group', action='store', help='Remove a Tag Group by Name')
         parser.add_argument('--del-host', action='store', help='Remove a Host by Name')
         parser.add_argument('--del-tag', action='store', help='Remove a Tag by Name')
+        
+        parser.add_argument('--ssh-config', action='store_true', help='Output hosts in SSH Config format')
         
         
         self.args = parser.parse_args()
