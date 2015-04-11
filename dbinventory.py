@@ -44,9 +44,12 @@ except ImportError, e:
 
 try:
     from Crypto.Cipher import AES
+    from Crypto.Random import get_random_bytes
     import hashlib
     import binascii
+    CRYPTO_ENABLED = False
     AES_KEY = None
+
     
 except ImportError, e:
     print "failed=True msg='`pycrypto` library required for this script'"
@@ -79,6 +82,9 @@ class BlueAcornInventory(object):
         self.db_engine = None
         self.db_session = None
         self.database_initialize()
+        
+        # enable encrpytion
+        self.enable_encryption()
         
         # initialize UI
         if self.args.add_group:
@@ -243,11 +249,7 @@ class BlueAcornInventory(object):
             print json.dumps(self.database_export())
             sys.exit(0)
             
-        # toggle encryption/decryption
-        self.set_or_get_passphrase()
-            
         return self.database_get_session()
-    
     
     
     def database_create_tables(self):
@@ -394,8 +396,6 @@ class BlueAcornInventory(object):
         db.delete(instance)
         db.commit()
         
-    
-    
    
     def get_group(self, **kwargs):
         return self.database_get_session().query(TagGroup).filter_by(**kwargs).first()
@@ -407,35 +407,36 @@ class BlueAcornInventory(object):
         return self.database_get_session().query(Tag).filter_by(**kwargs).first()
     
 
-    def set_or_get_passphrase(self):
+    def enable_encryption(self):
         
         if not self.db_secret:
             return False
         
-        global AES_KEY
+        global CRYPTO_ENABLED
+        CRYPTO_ENABLED = True
         
-        AES_KEY = hashlib.sha256(self.db_secret).digest()
         db = self.database_get_session()
+        db_passphrase = db.query(Config).filter_by(name='passphrase').first()
+        db_salt = db.query(Config).filter_by(name='passphrase_salt').first()
         
-        config_name = 'passphrase'
+        global AES_KEY
+        salt = db_salt.value if db_salt else aes_saltgen()
+        AES_KEY = aes_keygen(self.db_secret, salt)
+        
         expected_value = 'secret!'
-        encrypted_value = aes_encrypt(expected_value)
         
-        row = db.query(Config).filter_by(name=config_name).first()
-        
-        if not row:
-            Record = Config(name=config_name, value=encrypted_value)
-            db.add(Record)
+        if not db_passphrase:
+            encrypted_value = aes_encrypt(expected_value)
+            db.add(Config(name='passphrase_salt', value=salt))
+            db.add(Config(name='passphrase', value=encrypted_value))
             db.commit()
         
-        elif aes_decrypt(row.value) != expected_value:
+        elif aes_decrypt(db_passphrase.value) != expected_value:
             print "this database is protected with a different passphrase -- please provide the correct one!"
-            sys.exit(-1) 
+            sys.exit(-1)
             
-        return AES_KEY
+
     
-    
-        
 ###########################################################################
 # User Interface
 ###########################################################################
@@ -580,14 +581,15 @@ if UI_ENABLED:
             self.add_field('ssh_port','SSH Port:', npyscreen.TitleText)
             
             
-       
-            self.add_field('ssh_pass','SSH Pass:', npyscreen.TitleText, editable=(AES_KEY))
-            self.add_field('sudo_pass','sudo Pass:', npyscreen.TitleText, editable=(AES_KEY))
-            if not AES_KEY:
+            global CRYPTO_ENABLED
+            if not CRYPTO_ENABLED:
                 npyscreen.notify_confirm('Provide a --db-secret if you want to set the ssh_pass and sudo_pass variables.')
             
-            db = self.parentApp.db
+            self.add_field('ssh_pass','SSH Pass:', npyscreen.TitleText, editable=(CRYPTO_ENABLED))
+            self.add_field('sudo_pass','sudo Pass:', npyscreen.TitleText, editable=(CRYPTO_ENABLED))
+           
             
+            db = self.parentApp.db
             #for group in db.query(TagGroup).filter(TagGroup.selection_type.in_(['select','multiselect'])):
             for group in db.query(TagGroup):
                 tags = [tag.name for tag in group.tags]
@@ -619,15 +621,25 @@ if UI_ENABLED:
 # Utility
 ###########################################################################
 def aes_encrypt(data):
-    if data and (AES_KEY):
+    if CRYPTO_ENABLED and data:
         cipher = AES.new(AES_KEY)
         data = data + (" " * (16 - (len(data) % 16)))
         return binascii.hexlify(cipher.encrypt(data))
 
 def aes_decrypt(data):
-    if data and AES_KEY:
+    if CRYPTO_ENABLED and data:
         cipher = AES.new(AES_KEY)
         return cipher.decrypt(binascii.unhexlify(data)).rstrip()
+    
+def aes_keygen(passphrase=None, salt=None):
+    if not passphrase or not salt: 
+        return None
+
+    return hashlib.sha256(binascii.unhexlify(salt) + passphrase).digest()
+    
+    
+def aes_saltgen():
+    return binascii.hexlify(get_random_bytes(16))
     
     
 def transmorg(data, keys):
@@ -711,9 +723,11 @@ class Config(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True)
-    value = Column(String)
+    value = Column(String(80))
+    
 
 
     
 # Run the script
 BlueAcornInventory()
+
