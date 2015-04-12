@@ -87,6 +87,9 @@ class BlueAcornInventory(object):
         self.enable_encryption()
         
         # initialize UI
+        if self.args.edit:
+            self.start_ui()
+        
         if self.args.add_group:
             group_name = self.args.add_group
             if self.get_group(name=group_name):
@@ -194,17 +197,19 @@ class BlueAcornInventory(object):
         parser.add_argument('--pretty', '-p', action='store_true', help='Pretty-print results')
         
         
-        parser.add_argument('--db-path', '-d', action='store', help='Path to Hosts Database File, defaults to DBINVENTORY_PATH environment variable if set, or "<current working directory>/.dbinventory.sqlite3"')
+        parser.add_argument('--db-path', action='store', help='Path to Hosts Database File, defaults to DBINVENTORY_PATH environment variable if set, or "<current working directory>/.dbinventory.sqlite3"')
         
-        parser.add_argument('--db-create', '-c', action='store_true', help='When set, attempt to create the database if it does not already exist')
-        parser.add_argument('--db-export', '-e', action='store_true', help='Export groups, tags, and hosts as JSON')
-        parser.add_argument('--db-import', '-i', action='store', help='Pathname to JSON file containing groups, tags, and hosts to import.')
-        parser.add_argument('--db-secret', '-s', action='store', help='Database Secret Key for host password encryption, defaults to DBINVENTORY_SECRET environment variable')
+        parser.add_argument('--db-create', action='store_true', help='When set, attempt to create the database if it does not already exist')
+        parser.add_argument('--db-export', action='store_true', help='Export groups, tags, and hosts as JSON')
+        parser.add_argument('--db-import', action='store', help='Pathname to JSON file containing groups, tags, and hosts to import.')
+        parser.add_argument('--db-secret', action='store', help='Database Secret Key for host password encryption, defaults to DBINVENTORY_SECRET environment variable')
         
         parser.add_argument('--list', action='store_true', help='List all active Hosts (default: True)')
         parser.add_argument('--host', action='store', help='Get all Ansible inventory variables about a specific Host')
 
-
+        
+        parser.add_argument('--edit','-e', action='store_true', help='Manage Hosts and Tags')
+        
         parser.add_argument('--add-group', action='store', help='Add a Tag Group by Name')
         parser.add_argument('--add-host', action='store', help='Add a Host by Name')
         parser.add_argument('--add-tag', action='store', help='Add a Tag by Name')
@@ -213,7 +218,7 @@ class BlueAcornInventory(object):
         parser.add_argument('--del-host', action='store', help='Remove a Host by Name')
         parser.add_argument('--del-tag', action='store', help='Remove a Tag by Name')
         
-        parser.add_argument('--ssh-config', action='store_true', help='Output hosts in SSH Config format')
+        parser.add_argument('--ssh-config','-c', action='store_true', help='Output hosts in SSH Config format')
         
         
         self.args = parser.parse_args()
@@ -440,51 +445,119 @@ class BlueAcornInventory(object):
 ###########################################################################
 # User Interface
 ###########################################################################
-
-    def ui_start(self, form_name, entity_name=None):
+        
+    def start_ui(self, form_name=None, entity_name=None):
         if not UI_ENABLED:
             print "`npyscreen` library is required by this command"
             sys.exit(-1)
             
-        app = UI().start(self, form_name,entity_name)
+        app = UI().start(self)
         
 
 if UI_ENABLED:
     
     class UI(npyscreen.NPSAppManaged):
         def onStart(self):
-            self.addForm('AddGroup',UI_AddGroupForm, name="Add Tag Group")
-            self.addForm('AddHost',UI_AddHostForm, name="Add Host",minimum_lines=30)
-            self.addForm('AddTag',UI_AddTagForm, name="Add Tag",minimum_lines=30)
+            self.addForm("MAIN", UI_MainMenu)
+            self.addFormClass("HostForm", UI_HostForm)
+            self.addFormClass("TagForm", UI_HostForm)
             
+            self.record_name = None
         
-        def start(self, controller, start_form, entity_name):
+        def change_form(self, form_id, record_name=None):
+            self.record_name = record_name
+            self.switchForm(form_id)
+            self.resetHistory()
             
+            if form_id == "MAIN":
+                self.getForm(form_id).refresh_boxes()
+            
+        def start(self, controller):
             self.controller = controller
             self.db = controller.database_get_session()
             
-            self.setNextForm(start_form)
-            self.STARTING_FORM = start_form
-            self.entity_name = entity_name
-            
             return self.run()
+        
+        
+    class UI_MainMenu(npyscreen.TitleForm):
+        
+        OK_BUTTON_TEXT = 'Exit'
+        
+        def create(self):
+            self.name="ansible-dbinventory  -  l: search L: clear n: next match p: prev match"
+            self.boxes = [
+              self.add(UI_HostsBox,name="Hosts:", max_width=50, relx=2),
+              self.add(UI_TagsBox,name="Tags:", max_width=20, rely=1, relx=52)
+            ]
             
+            self.refresh_boxes( )
             
+        def refresh_boxes(self):
+            for box in self.boxes:
+                box.refresh_values()
+    
+    class UI_Box(npyscreen.BoxTitle):
+        
+        ActionForm = None
+        
+        def __init__(self, screen, *args, **kwargs):
+            widget_args = {"value_changed_callback": self.handle_selection}
+            footer = "+ add / - del"
+            super(UI_Box, self).__init__(screen, contained_widget_arguments=widget_args, footer=footer, *args, **kwargs)
+            self.entry_widget.add_handlers({"-": self.handle_del,"+": self.handle_add})
+            
+        def get_selection(self, cursor=False):
+            widget = self.entry_widget
+            position = widget.cursor_line if cursor else widget.value
+            
+            return widget.values[position] if position != None else None
+        
+        def handle_selection(self, widget):
+            selection = self.get_selection()
+            
+            if selection:
+                self.handle_add(selection=selection)
+                
+        def handle_add(self, *args, **kwargs):
+            selection = kwargs['selection'] if 'selection' in kwargs else None
+            self.parent.parentApp.change_form(self.ActionForm, record_name=selection)
+            
+        def handle_del(self, *args, **kwargs):
+            record_name = self.get_selection(cursor=True)
+            if npyscreen.notify_yes_no("Really delete %s?" % (record_name)):
+                self.delete_record(record_name)
+                self.refresh_values()
+                self.update()
+            
+        def delete_record(self):
+            pass
+        
+        def refresh_values(self):
+            pass
+        
+            
+    class UI_HostsBox(UI_Box):
+        
+        ActionForm = 'HostForm'
+        
+        def delete_record(self, record_name):
+            self.parent.parentApp.controller.del_host(record_name)
+                
+        def refresh_values(self):
+            self.values = [r for r, in sorted(self.parent.parentApp.db.query(Host.host))]
+            
+    class UI_TagsBox(UI_Box):
+        pass
     
     class UI_Form(npyscreen.ActionFormMinimal):
-        
         def __init__(self, *args, **kwargs):
             self.FIELDS = {}
             self.REQUIRED_FIELDS = []
             super(UI_Form,self).__init__(*args, **kwargs)
         
-        def create(self):
-            self.add_required_field('name', 'Name:', npyscreen.TitleText, value=self.parentApp.entity_name, editable=False)
-        
         def add_field(self, field_id, prompt, field_class, **kwargs):
-            field = self.add(field_class, name=prompt, **kwargs)
-            self.FIELDS[field_id] = field
-            return field
+            self.FIELDS[field_id] = self.add(field_class, name=prompt, **kwargs)
+            return self.FIELDS[field_id]
             
         def add_required_field(self, field_id, prompt, *args, **kwargs):
             self.REQUIRED_FIELDS.append(field_id)
@@ -498,16 +571,13 @@ if UI_ENABLED:
             
             for required_key in self.REQUIRED_FIELDS:
                 if not obj.get(required_key,False):
-                    npyscreen.notify_confirm('Please complete all required fields')
-                    return
+                    return npyscreen.notify_confirm('Please complete all required fields')
                 
             if self.add_object(obj):
-                self.parentApp.setNextForm(None)
-                return
+                return self.parentApp.change_form('MAIN')
                 
             npyscreen.notify_confirm('Error Adding!')
                 
-            
         def get_object_to_add(self):
             
             obj = {}
@@ -527,11 +597,12 @@ if UI_ENABLED:
                     
                 obj[key] = value
                     
-                    
-            #npyscreen.notify_confirm("obj: %s" % (obj))
             return obj
         
         def add_object(self, obj):
+            pass
+        
+        def get_record(self):
             pass
                 
             
@@ -572,21 +643,23 @@ if UI_ENABLED:
             return False
         
             
-    class UI_AddHostForm(UI_Form):
+    class UI_HostForm(UI_Form):
+        
         def create(self):
+            record = self.get_record()
             
-            self.add_required_field('host', 'Host:', npyscreen.TitleText, value=self.parentApp.entity_name, editable=False)
-            self.add_field('host_name','Host IP/FQDN:', npyscreen.TitleText)
-            self.add_required_field('ssh_user','SSH User:', npyscreen.TitleText)
-            self.add_field('ssh_port','SSH Port:', npyscreen.TitleText)
+            self.add_required_field('host', 'Host:', npyscreen.TitleText, value=record.host)
+            self.add_field('host_name','Host IP/FQDN:', npyscreen.TitleText, value=record.host_name)
+            self.add_required_field('ssh_user','SSH User:', npyscreen.TitleText, value=record.ssh_user)
+            self.add_field('ssh_port','SSH Port:', npyscreen.TitleText, value=record.ssh_port)
             
             
             global CRYPTO_ENABLED
             if not CRYPTO_ENABLED:
                 npyscreen.notify_confirm('Provide a --db-secret if you want to set the ssh_pass and sudo_pass variables.')
             
-            self.add_field('ssh_pass','SSH Pass:', npyscreen.TitleText, editable=(CRYPTO_ENABLED))
-            self.add_field('sudo_pass','sudo Pass:', npyscreen.TitleText, editable=(CRYPTO_ENABLED))
+            self.add_field('ssh_pass','SSH Pass:', npyscreen.TitleText, editable=(CRYPTO_ENABLED), value=record.ssh_pass)
+            self.add_field('sudo_pass','sudo Pass:', npyscreen.TitleText, editable=(CRYPTO_ENABLED), value=record.sudo_pass)
            
             
             db = self.parentApp.db
@@ -598,7 +671,6 @@ if UI_ENABLED:
                 field_class = npyscreen.TitleSelectOne if group.selection_type == 'select' else npyscreen.TitleMultiSelect
                 
                 self.add_field('_tag_group_' + group.name, group.name + ':', field_class, values=tags,max_height=height)
-                
                 
         def add_object(self,obj):
             
@@ -613,8 +685,14 @@ if UI_ENABLED:
                         new_obj[key] = value
             
             if self.parentApp.controller.add_host(new_obj):
-                npyscreen.notify_confirm("Added Host `%s`" % (obj['host']))
                 return True
+            
+        def get_record(self):
+            if (self.parentApp.record_name):
+                return self.parentApp.controller.get_host(host=self.parentApp.record_name)
+            
+            return Host()
+                
 
 
 ###########################################################################
