@@ -447,9 +447,10 @@ if UI_ENABLED:
         def onStart(self):
             self.addForm("MAIN", UI_MainMenu)
             self.addFormClass("HostForm", UI_HostForm)
-            self.addFormClass("TagForm", UI_HostForm)
+            self.addFormClass("TagForm", UI_TagForm)
             
             self.record_name = None
+            self.crypto_notified = False
         
         def change_form(self, form_id, record_name=None):
             self.record_name = record_name
@@ -477,7 +478,10 @@ if UI_ENABLED:
               self.add(UI_TagsBox,name="Tags:", max_width=20, rely=1, relx=52)
             ]
             
-            self.refresh_boxes( )
+            self.refresh_boxes()
+            
+        def post_edit_loop(self):
+            self.parentApp.switchForm(None)
             
         def refresh_boxes(self):
             for box in self.boxes:
@@ -514,12 +518,17 @@ if UI_ENABLED:
             if npyscreen.notify_yes_no("Really delete %s?" % (record_name)):
                 self.delete_record(record_name)
                 self.refresh_values()
-                self.update()
+                
+        def refresh_values(self):
+            self.entry_widget.value = None
+            # TODO: case insensitive sort -- preferable at DBAL
+            self.values = [r for r, in sorted(self.get_values_query())]
+            self.update()
             
         def delete_record(self):
             pass
         
-        def refresh_values(self):
+        def get_values_query(self):
             pass
         
             
@@ -530,17 +539,34 @@ if UI_ENABLED:
         def delete_record(self, record_name):
             self.parent.parentApp.controller.del_host(record_name)
                 
-        def refresh_values(self):
-            self.values = [r for r, in sorted(self.parent.parentApp.db.query(Host.host))]
+        def get_values_query(self):
+            return self.parent.parentApp.db.query(Host.host)
             
     class UI_TagsBox(UI_Box):
-        pass
+        ActionForm = 'TagForm'
+        
+        def delete_record(self, record_name):
+            self.parent.parentApp.controller.del_tag(record_name)
+                
+        def get_values_query(self):
+            return self.parent.parentApp.db.query(Tag.name)
     
-    class UI_Form(npyscreen.ActionFormMinimal):
+    class UI_Form(npyscreen.ActionFormExpandedV2):
+        
+        OK_BUTTON_TEXT = 'Save (^S)'
+        CANCEL_BUTTON_TEXT = 'Cancel (^X)'
+        CANCEL_BUTTON_BR_OFFSET = (1, 18)
+        
         def __init__(self, *args, **kwargs):
             self.FIELDS = {}
             self.REQUIRED_FIELDS = []
             super(UI_Form,self).__init__(*args, **kwargs)
+            
+            record = self.get_record()
+            if record and record.id:
+                self.add_field('id','id',npyscreen.Textfield,value=record.id, editable=False, hidden=True, rely=1)
+                
+            self.add_handlers({'^X': self.on_cancel,"^S": self.on_ok})
         
         def add_field(self, field_id, prompt, field_class, **kwargs):
             self.FIELDS[field_id] = self.add(field_class, name=prompt, **kwargs)
@@ -552,8 +578,11 @@ if UI_ENABLED:
             
             field = self.add_field(field_id, prompt, *args, **kwargs)
             field.labelColor = 'STANDOUT'
+            
+        def on_cancel(self, *args, **kwargs):
+            return self.parentApp.change_form('MAIN')
         
-        def on_ok(self):
+        def on_ok(self, *args, **kwargs):
             obj = self.get_object_to_add()
             
             for required_key in self.REQUIRED_FIELDS:
@@ -572,13 +601,13 @@ if UI_ENABLED:
             for key, field in self.FIELDS.iteritems():
                 if isinstance(field,npyscreen.TitleSelectOne) or isinstance(field, npyscreen.SelectOne):
                     try:
-                        value = field.get_selected_objects()[0]
+                        value = field.get_selected_objects()
                     except:
                         value = None
-                
+                        
                 elif isinstance(field,npyscreen.TitleMultiSelect) or isinstance(field, npyscreen.MultiSelect):
                     value = field.get_selected_objects()
-                
+                    
                 else:
                     value = field.value
                     
@@ -604,45 +633,51 @@ if UI_ENABLED:
             
             
         def add_object(self,obj):
-            if self.parentApp.controller.add_group(obj):
+            if self.parentApp.controller.add_or_update_group(obj):
                 npyscreen.notify_confirm("Added Tag Group `%s`" % (obj['name']))
                 return True
                 
             return False
             
             
-    class UI_AddTagForm(UI_Form):
+    class UI_TagForm(UI_Form):
         
         def create(self):
-            super(self.__class__,self).create()
+            record = self.get_record()
+            self.name = 'Edit Tag' if record.id else 'Add Tag'
+            
+            self.add_required_field('name', 'Tag:', npyscreen.TitleText, value=record.name)
             
             groups = [group.name for group in self.parentApp.db.query(TagGroup)]
             height = min(10, len(groups)) + 2
-            
             self.add_required_field('group','Group:',npyscreen.TitleSelectOne,values=groups,max_height=height)
-            
         
         def add_object(self,obj):
-            if self.parentApp.controller.add_tag(obj):
-                npyscreen.notify_confirm("Added Tag `%s`" % (obj['name']))
+            if self.parentApp.controller.add_or_update_tag(obj):
                 return True
-                
-            return False
+        
+        def get_record(self):
+            if (self.parentApp.record_name):
+                return self.parentApp.controller.get_tag(name=self.parentApp.record_name)
+            
+            return Tag()
         
             
     class UI_HostForm(UI_Form):
         
         def create(self):
             record = self.get_record()
+            self.name = 'Edit Host' if record.id else 'Add Host'
             
             self.add_required_field('host', 'Host:', npyscreen.TitleText, value=record.host)
             self.add_field('host_name','Host IP/FQDN:', npyscreen.TitleText, value=record.host_name)
             self.add_required_field('ssh_user','SSH User:', npyscreen.TitleText, value=record.ssh_user)
-            self.add_field('ssh_port','SSH Port:', npyscreen.TitleText, value=record.ssh_port)
+            self.add_field('ssh_port','SSH Port:', npyscreen.TitleText, value=str(record.ssh_port))
             
             
             global CRYPTO_ENABLED
-            if not CRYPTO_ENABLED:
+            if not CRYPTO_ENABLED and not self.parentApp.crypto_notified:
+                self.parentApp.crypto_notified = True
                 npyscreen.notify_confirm('Provide a --db-secret if you want to set the ssh_pass and sudo_pass variables.')
             
             self.add_field('ssh_pass','SSH Pass:', npyscreen.TitleText, editable=(CRYPTO_ENABLED), value=record.ssh_pass)
@@ -650,14 +685,25 @@ if UI_ENABLED:
            
             
             db = self.parentApp.db
+            host_tags = [tag.name for tag in record.tags] if record.id else []
+            
             #for group in db.query(TagGroup).filter(TagGroup.selection_type.in_(['select','multiselect'])):
             for group in db.query(TagGroup):
                 tags = [tag.name for tag in group.tags]
                 prompt = group.name + ':'
                 height = min(10, len(tags)) + 2
-                field_class = npyscreen.TitleSelectOne if group.selection_type == 'select' else npyscreen.TitleMultiSelect
                 
-                self.add_field('_tag_group_' + group.name, group.name + ':', field_class, values=tags,max_height=height)
+                value = []
+                for idx, tag in enumerate(tags):
+                    if tag in host_tags:
+                        value.append(idx)
+                
+                if group.selection_type == 'select':
+                    value = value[0] if len(value) else None
+                    self.add_field('_tag_group_' + group.name, group.name + ':', npyscreen.TitleSelectOne, values=tags, value=value, max_height=height)
+                else:
+                    self.add_field('_tag_group_' + group.name, group.name + ':', npyscreen.TitleMultiSelect, values=tags, value=value, max_height=height)
+                
                 
         def add_object(self,obj):
             
@@ -671,7 +717,7 @@ if UI_ENABLED:
                     else:
                         new_obj[key] = value
             
-            if self.parentApp.controller.add_host(new_obj):
+            if self.parentApp.controller.add_or_update_host(new_obj):
                 return True
             
         def get_record(self):
@@ -770,7 +816,6 @@ class TagGroup(Base):
     tags = relationship("Tag", backref="group")
     
     name = Column(String)
-    #selection_type = Column(Enum('checkbox', 'select', 'multiselect', name='tag_group_types'))
     selection_type = Column(Enum('select', 'multiselect', name='tag_group_types'))
     
     __mapper_args__ = {"order_by": name}

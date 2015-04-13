@@ -132,3 +132,14 @@ value is encoded. Subsequent calls decrypt and test the known value for a
 match. If your secret does not match the secret stored in the database, dbinventory
 will complain and exit. This is meant to provent a operator misspellings of 
 the secret, which could result in unretrievable data.
+
+
+Development
+===========
+
+TODO:
+
+* finish tag + group editing
+* do not import [new] duplicates
+* fix height issue 
+* allow reselection of edited host/tag
