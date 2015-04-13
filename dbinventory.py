@@ -35,7 +35,7 @@ except ImportError:
     import simplejson as json
 
 try:
-    from sqlalchemy import create_engine, Column, Integer, String, Enum, ForeignKey, TypeDecorator
+    from sqlalchemy import create_engine, inspect, Column, Integer, String, Enum, ForeignKey, TypeDecorator
     from sqlalchemy.ext.declarative import declarative_base
     from sqlalchemy.orm import Session
 except ImportError, e:
@@ -85,7 +85,7 @@ class BlueAcornInventory(object):
         
         # enable encrpytion
         self.enable_encryption()
-        
+    
         # initialize UI
         if self.args.edit:
             self.start_ui()
@@ -288,7 +288,7 @@ class BlueAcornInventory(object):
         
         for key in ['groups', 'tags', 'hosts']:
             if key in data:
-                method = getattr(self, "add_" + key[:-1])
+                method = getattr(self, "add_or_update_" + key[:-1])
                 for obj in data[key]:
                     method(obj)
         
@@ -316,100 +316,87 @@ class BlueAcornInventory(object):
         return output 
          
     
-    def add_group(self, obj):
-        Record = self.get_group(name=obj['name'])
-        
-        if not Record:
-            db = self.database_get_session()
-            Record = TagGroup(name=obj['name'], selection_type=obj['type'])
-            db.add(Record)
-            db.commit()
-    
-        return Record
-    
-    def add_host(self, obj):
-        Record = self.get_host(host=obj['host'])
-        
-        if not Record:
-            db = self.database_get_session()
-            Record = Host(host=obj['host'])
+    def add_or_update_group(self, obj):
+        type = obj.pop('selection_type',None)
+        if not type:
+            type = obj.pop('type')
             
-            for key in ['host_name', 'ssh_user', 'ssh_port', 'ssh_pass','sudo_pass']:
-                if key in obj:
-                    setattr(Record, key, obj[key])
-            
-            db.add(Record)
-            db.commit()
+        obj['selection_type'] = type
+        return self.add_or_update_obj(TagGroup, obj)
+
+    def add_or_update_host(self, obj):
+        Record = self.add_or_update_obj(Host, obj)
             
         if 'tags' in obj:
-            db = self.database_get_session()
+            tags = []
             for tag_name in obj['tags']:
                 TagRecord = self.get_tag(name=tag_name)
                 if TagRecord:
-                    Record.tags.append(TagRecord)
-            db.commit()
+                    tags.append(TagRecord)
+                    
+            Record.tags = tags
+            self.database_get_session().commit()
     
         return Record
     
-    def add_tag(self, obj):
-        Record = self.get_tag(name=obj['name'])
+    def add_or_update_tag(self, obj):
         group = self.get_group(name=obj['group'])
-        
         if not group:
             print "could not add tag `%s`, group `%s` not found" % (obj['name'], obj['group'])
             sys.exit(-1)
         
+        obj['group_id'] = group.id
+        return self.add_or_update_obj(Tag, obj)
+    
+    def add_or_update_obj(self, BaseClass, obj):
         
-        if not Record:
-            db = self.database_get_session()
-            Record = Tag(name=obj['name'], group_id=group.id)
+        db = self.database_get_session()
+        id = obj.pop('id',None)
+        
+        if id:
+            Record = db.query(BaseClass).filter_by(id=id).first()
+        else:
+            Record = BaseClass()
             db.add(Record)
-            db.commit()
             
+        # only adds or update columns, not relationships
+        mapper = inspect(BaseClass)
+        for column in mapper.column_attrs:
+            if column.key in obj:
+                setattr(Record, column.key, obj[column.key])
+        
+        db.commit()
         return Record
     
-    
     def del_group(self, name):
-        obj = self.get_group(name=name)
-        
-        if not obj:
-            print "group `%s` not found" % (name)
-            sys.exit(-1)
-        
-        return self.del_obj(obj)
+        return self.del_obj(self.get_group(name=name), name)
         
     def del_tag(self, name):
-        obj = self.get_tag(name=name)
-        
-        if not obj:
-            print "tag `%s` not found" % (name)
-            sys.exit(-1)
-        
-        return self.del_obj(obj)
+        return self.del_obj(self.get_tag(name=name), name)
     
     def del_host(self, name):
-        obj = self.get_host(host=name)
-        
-        if not obj:
-            print "host `%s` not found" % (name)
-            sys.exit(-1)
-        
-        return self.del_obj(obj)
+        return self.del_obj(self.get_host(host=name), name)
     
-    def del_obj(self, instance):
+    def del_obj(self, obj, name):
+        if not obj:
+            print "`%s` not found" % (name)
+            sys.exit(-1)
+            
         db = self.database_get_session()
         db.delete(instance)
         db.commit()
-        
    
     def get_group(self, **kwargs):
-        return self.database_get_session().query(TagGroup).filter_by(**kwargs).first()
+        return self.get_obj(TagGroup,**kwargs)
     
     def get_host(self, **kwargs):
-        return self.database_get_session().query(Host).filter_by(**kwargs).first()
+        return self.get_obj(Host,**kwargs)
             
     def get_tag(self, **kwargs):
-        return self.database_get_session().query(Tag).filter_by(**kwargs).first()
+        return self.get_obj(Tag,**kwargs)
+    
+    def get_obj(self, BaseClass, **kwargs):
+        return self.database_get_session().query(BaseClass).filter_by(**kwargs).first()
     
 
     def enable_encryption(self):
