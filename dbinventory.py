@@ -342,7 +342,7 @@ class BlueAcornInventory(object):
         return Record
     
     def add_or_update_tag(self, data):
-        group = self.get_group(name=data['group'])
+        group = self.get_group(name=data['group'][0])
         if not group:
             print "could not add tag `%s`, group `%s` not found" % (data['name'], data['group'])
             sys.exit(-1)
@@ -644,12 +644,22 @@ if UI_ENABLED:
         def create(self):
             record = self.get_record()
             self.name = 'Edit Tag' if record.id else 'Add Tag'
-            
             self.add_required_field('name', 'Tag:', npyscreen.TitleText, value=record.name)
             
-            groups = [group.name for group in self.parentApp.db.query(TagGroup)]
-            height = min(10, len(groups)) + 2
-            self.add_required_field('group','Group:',npyscreen.TitleSelectOne,values=groups,max_height=height)
+            groups = self.parentApp.db.query(TagGroup)
+            group_names = [group.name for group in groups]
+            group_ids = [group.id for group in groups]
+            
+
+            value = []
+            for idx, group_id in enumerate(group_ids):
+                if group_id == record.group_id:
+                    value.append(idx)
+            
+            height = min(10, len(group_ids)) + 2
+            self.add_required_field('group','Group:',npyscreen.TitleSelectOne,values=group_names,value=value,max_height=height)
+
+
         
         def add_record(self,data):
             if self.parentApp.controller.add_or_update_tag(data):
