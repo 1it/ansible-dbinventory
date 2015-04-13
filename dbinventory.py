@@ -386,15 +386,15 @@ class BlueAcornInventory(object):
             db.commit()
    
     def get_group(self, **kwargs):
-        return self.get_obj(TagGroup,**kwargs)
+        return self.get_record(TagGroup,**kwargs)
     
     def get_host(self, **kwargs):
-        return self.get_obj(Host,**kwargs)
+        return self.get_record(Host,**kwargs)
             
     def get_tag(self, **kwargs):
-        return self.get_obj(Tag,**kwargs)
+        return self.get_record(Tag,**kwargs)
     
-    def get_obj(self, BaseClass, **kwargs):
+    def get_record(self, BaseClass, **kwargs):
         return self.database_get_session().query(BaseClass).filter_by(**kwargs).first()
     
 
@@ -582,20 +582,20 @@ if UI_ENABLED:
             return self.parentApp.change_form('MAIN')
         
         def on_ok(self, *args, **kwargs):
-            obj = self.get_object_to_add()
+            data = self.get_data_to_add()
             
             for required_key in self.REQUIRED_FIELDS:
-                if not obj.get(required_key,False):
+                if not data.get(required_key,False):
                     return npyscreen.notify_confirm('Please complete all required fields')
                 
-            if self.add_object(obj):
+            if self.add_record(data):
                 return self.parentApp.change_form('MAIN')
                 
             npyscreen.notify_confirm('Error Adding!')
                 
-        def get_object_to_add(self):
+        def get_data_to_add(self):
             
-            obj = {}
+            data = {}
             
             for key, field in self.FIELDS.iteritems():
                 if isinstance(field,npyscreen.TitleSelectOne) or isinstance(field, npyscreen.SelectOne):
@@ -610,11 +610,11 @@ if UI_ENABLED:
                 else:
                     value = field.value
                     
-                obj[key] = value
+                data[key] = value
                     
-            return obj
+            return data
         
-        def add_object(self, obj):
+        def add_record(self, data):
             pass
         
         def get_record(self):
@@ -631,9 +631,9 @@ if UI_ENABLED:
             self.add_required_field('type','Type:',npyscreen.TitleSelectOne,values=enums)
             
             
-        def add_object(self,obj):
-            if self.parentApp.controller.add_or_update_group(obj):
-                npyscreen.notify_confirm("Added Tag Group `%s`" % (obj['name']))
+        def add_record(self,data):
+            if self.parentApp.controller.add_or_update_group(data):
+                npyscreen.notify_confirm("Added Tag Group `%s`" % (data['name']))
                 return True
                 
             return False
@@ -651,8 +651,8 @@ if UI_ENABLED:
             height = min(10, len(groups)) + 2
             self.add_required_field('group','Group:',npyscreen.TitleSelectOne,values=groups,max_height=height)
         
-        def add_object(self,obj):
-            if self.parentApp.controller.add_or_update_tag(obj):
+        def add_record(self,data):
+            if self.parentApp.controller.add_or_update_tag(data):
                 return True
         
         def get_record(self):
@@ -704,19 +704,19 @@ if UI_ENABLED:
                     self.add_field('_tag_group_' + group.name, group.name + ':', npyscreen.TitleMultiSelect, values=tags, value=value, max_height=height)
                 
                 
-        def add_object(self,obj):
+        def add_record(self,data):
             
-            new_obj = {"tags": []}
+            new_data = {"tags": []}
             tag_prefix = '_tag_group_'
             
-            for key, value in obj.iteritems():
+            for key, value in data.iteritems():
                 if (value):
                     if key.startswith(tag_prefix):
-                        new_obj['tags'] += value
+                        new_data['tags'] += value
                     else:
-                        new_obj[key] = value
+                        new_data[key] = value
             
-            if self.parentApp.controller.add_or_update_host(new_obj):
+            if self.parentApp.controller.add_or_update_host(new_data):
                 return True
             
         def get_record(self):
