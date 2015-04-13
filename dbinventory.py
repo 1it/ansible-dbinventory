@@ -282,15 +282,17 @@ class BlueAcornInventory(object):
                 sys.exit(-1)
         
         with open(filename) as data_file:    
-            data = json.load(data_file)
-        data_file.close()
-            
+            rows = json.load(data_file)
         
         for key in ['groups', 'tags', 'hosts']:
-            if key in data:
-                method = getattr(self, "add_or_update_" + key[:-1])
-                for obj in data[key]:
-                    method(obj)
+            if key in rows:
+                update_method = getattr(self, "add_or_update_" + key[:-1])
+                record_method = getattr(self, "get_" + key[:-1])
+                for data in rows[key]:
+                    record = record_method(host=data['host']) if key == "hosts" else record_method(name=data['name'])
+                    if record:
+                        data['id'] = record.id
+                    update_method(data)
         
         return
     
@@ -316,20 +318,20 @@ class BlueAcornInventory(object):
         return output 
          
     
-    def add_or_update_group(self, obj):
-        type = obj.pop('selection_type',None)
+    def add_or_update_group(self, data):
+        type = data.pop('selection_type',None)
         if not type:
-            type = obj.pop('type')
+            type = data.pop('type')
             
-        obj['selection_type'] = type
-        return self.add_or_update_obj(TagGroup, obj)
+        data['selection_type'] = type
+        return self.add_or_update(TagGroup, data)
 
-    def add_or_update_host(self, obj):
-        Record = self.add_or_update_obj(Host, obj)
+    def add_or_update_host(self, data):
+        Record = self.add_or_update(Host, data)
             
-        if 'tags' in obj:
+        if 'tags' in data:
             tags = []
-            for tag_name in obj['tags']:
+            for tag_name in data['tags']:
                 TagRecord = self.get_tag(name=tag_name)
                 if TagRecord:
                     tags.append(TagRecord)
@@ -339,52 +341,49 @@ class BlueAcornInventory(object):
     
         return Record
     
-    def add_or_update_tag(self, obj):
-        group = self.get_group(name=obj['group'])
+    def add_or_update_tag(self, data):
+        group = self.get_group(name=data['group'])
         if not group:
-            print "could not add tag `%s`, group `%s` not found" % (obj['name'], obj['group'])
+            print "could not add tag `%s`, group `%s` not found" % (data['name'], data['group'])
             sys.exit(-1)
         
-        obj['group_id'] = group.id
-        return self.add_or_update_obj(Tag, obj)
+        data['group_id'] = group.id
+        return self.add_or_update(Tag, data)
     
-    def add_or_update_obj(self, BaseClass, obj):
+    def add_or_update(self, ModelClass, data):
         
         db = self.database_get_session()
-        id = obj.pop('id',None)
+        id = data.pop('id',None)
         
         if id:
-            Record = db.query(BaseClass).filter_by(id=id).first()
+            Record = db.query(ModelClass).filter_by(id=id).first()
         else:
-            Record = BaseClass()
+            Record = ModelClass()
             db.add(Record)
             
         # only adds or update columns, not relationships
-        mapper = inspect(BaseClass)
+        mapper = inspect(ModelClass)
         for column in mapper.column_attrs:
-            if column.key in obj:
-                setattr(Record, column.key, obj[column.key])
+            if column.key in data:
+                setattr(Record, column.key, data[column.key])
         
         db.commit()
         return Record
     
     def del_group(self, name):
-        return self.del_obj(self.get_group(name=name), name)
+        return self.del_record(self.get_group(name=name))
         
     def del_tag(self, name):
-        return self.del_obj(self.get_tag(name=name), name)
+        return self.del_record(self.get_tag(name=name))
     
     def del_host(self, name):
-        return self.del_obj(self.get_host(host=name), name)
+        return self.del_record(self.get_host(host=name))
     
-    def del_obj(self, obj, name):
-        if not obj:
-            print "`%s` not found" % (name)
-            sys.exit(-1)
-            
-        db = self.database_get_session()
-        db.delete(instance)
-        db.commit()
+    def del_record(self, record):
+        if record:
+            db = self.database_get_session()
+            db.delete(instance)
+            db.commit()
    
     def get_group(self, **kwargs):
         return self.get_obj(TagGroup,**kwargs)
