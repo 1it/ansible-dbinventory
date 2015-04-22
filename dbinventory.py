@@ -342,7 +342,7 @@ class BlueAcornInventory(object):
         return Record
     
     def add_or_update_tag(self, data):
-        group = self.get_group(name=data['group'][0])
+        group = self.get_group(name=data['group'])
         if not group:
             print "could not add tag `%s`, group `%s` not found" % (data['name'], data['group'])
             sys.exit(-1)
