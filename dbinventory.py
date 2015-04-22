@@ -234,7 +234,7 @@ class BlueAcornInventory(object):
     def database_initialize(self):
         
         if not hasattr(self, 'db_path'):
-            self.db_path = os.path.dirname(os.path.realpath(__file__)) + '/.dbinventory.sqlite3'  
+            self.db_path = os.path.dirname(os.path.abspath(__file__)) + '/.dbinventory.sqlite3'  
             
         if not os.path.isfile(self.db_path):
             if(self.args.db_create):
