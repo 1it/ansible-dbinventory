@@ -83,43 +83,6 @@ class BlueAcornInventory(object):
         if self.args.edit:
             self.start_ui()
         
-        if self.args.add_group:
-            group_name = self.args.add_group
-            if self.get_group(name=group_name):
-                print "Tag Group `%s` already exists!" % (group_name)
-                sys.exit(-1)
-            self.ui_start('AddGroup',group_name)
-
-        if self.args.add_host:
-            host = self.args.add_host
-            if self.get_host(host=host):
-                print "Host `%s` already exists!" % (host)
-                sys.exit(-1)
-            self.ui_start('AddHost',host)
-            
-        if self.args.add_tag:
-            tag_name = self.args.add_tag
-            if self.get_tag(name=tag_name):
-                print "Tag `%s` already exists!" % (tag_name)
-                sys.exit(-1)
-            self.ui_start('AddTag',tag_name)
-            
-        if self.args.del_group:
-            self.del_group(self.args.del_group)
-            print "Group `%s` deleted." % (self.args.del_group)
-            sys.exit()
-            
-        if self.args.del_tag:
-            self.del_tag(self.args.del_tag)
-            print "Tag `%s` deleted." % (self.args.del_tag)
-            sys.exit()
-            
-        if self.args.del_host:
-            self.del_host(self.args.del_host)
-            print "Host `%s` deleted." % (self.args.del_host)
-            sys.exit()
-           
-           
            
         # --list or --host requested, output ansible-compliant inventory 
         ################################################################
@@ -203,6 +166,7 @@ class BlueAcornInventory(object):
         
         parser.add_argument('--edit','-e', action='store_true', help='Manage Hosts and Tags')
         
+        """
         parser.add_argument('--add-group', action='store', help='Add a Tag Group by Name')
         parser.add_argument('--add-host', action='store', help='Add a Host by Name')
         parser.add_argument('--add-tag', action='store', help='Add a Tag by Name')
@@ -210,6 +174,7 @@ class BlueAcornInventory(object):
         parser.add_argument('--del-group', action='store', help='Remove a Tag Group by Name')
         parser.add_argument('--del-host', action='store', help='Remove a Host by Name')
         parser.add_argument('--del-tag', action='store', help='Remove a Tag by Name')
+        """
         
         parser.add_argument('--ssh-config','-c', action='store_true', help='Output hosts in SSH Config format')
         
