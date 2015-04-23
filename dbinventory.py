@@ -679,7 +679,7 @@ if UI_ENABLED:
             self.add_required_field('host', 'Host:', npyscreen.TitleText, value=record.host)
             self.add_field('host_name','Host IP/FQDN:', npyscreen.TitleText, value=record.host_name)
             self.add_required_field('ssh_user','SSH User:', npyscreen.TitleText, value=record.ssh_user)
-            self.add_field('ssh_port','SSH Port:', npyscreen.TitleText, value=str(record.ssh_port))
+            self.add_field('ssh_port','SSH Port:', npyscreen.TitleText, value=record.ssh_port)
             
             
             global CRYPTO_ENABLED
@@ -718,11 +718,10 @@ if UI_ENABLED:
             tag_prefix = '_tag_group_'
             
             for key, value in data.iteritems():
-                if (value):
-                    if key.startswith(tag_prefix):
-                        new_data['tags'] += value
-                    else:
-                        new_data[key] = value
+                if value and key.startswith(tag_prefix):
+                    new_data['tags'] += value
+                else:
+                    new_data[key] = value
             
             if self.parentApp.controller.add_or_update_host(new_data):
                 return True
@@ -799,7 +798,7 @@ class Host(Base):
     host = Column(String)
     host_name = Column(String)
     ssh_user = Column(String)
-    ssh_port = Column(Integer)
+    ssh_port = Column(String)
     ssh_pass = Column("encrypted_ssh_pass", EncryptedValue(40), nullable=True)
     sudo_pass = Column("encrypted_sudo_pass", EncryptedValue(40), nullable=True)
     
