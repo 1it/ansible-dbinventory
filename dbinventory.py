@@ -335,7 +335,12 @@ class BlueAcornInventory(object):
         return Record
     
     def add_or_update_tag(self, data):
-        group = self.get_group(name=data['group'])
+        
+        group_name = data['group'] 
+        if not isinstance(group_name,basestring):
+            group_name = data['group'][0]
+        
+        group = self.get_group(name=group_name)
         if not group:
             print "could not add tag `%s`, group `%s` not found" % (data['name'], data['group'])
             sys.exit(-1)
@@ -375,7 +380,7 @@ class BlueAcornInventory(object):
     def del_record(self, record):
         if record:
             db = self.database_get_session()
-            db.delete(instance)
+            db.delete(record)
             db.commit()
    
     def get_group(self, **kwargs):
