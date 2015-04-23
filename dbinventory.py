@@ -1,10 +1,4 @@
 #!/usr/bin/env python
-from pprint import pprint
-from sqlalchemy.orm import relationship
-
-# blueacorn host manager 
-# https://bitbucket.org/zzzeek/sqlalchemy/wiki/UsageRecipes/SymmetricEncryption
-
 
 '''
 BlueAcorn external inventory script
@@ -12,12 +6,11 @@ BlueAcorn external inventory script
 
 Generates Ansible inventory backed by an sqlite database
 
-Based on https://github.com/geerlingguy/ansible-for-devops/tree/master/dynamic-inventory/digitalocean
-
 In addition to the --list and --host options used by Ansible, there are options
-for managing and printing passwords. Passwords are stored using AES symmetric
-encryption and can only be retrieved by providing the correct secret. 
+for managing hosts and host groups. -e opens a curses based interface.
 
+Passwords are stored using AES symmetric encryption and can only be managed
+by providing --db-secret
 '''
 
 ######################################################################
@@ -37,7 +30,7 @@ except ImportError:
 try:
     from sqlalchemy import create_engine, inspect, Column, Integer, String, Enum, ForeignKey, TypeDecorator
     from sqlalchemy.ext.declarative import declarative_base
-    from sqlalchemy.orm import Session
+    from sqlalchemy.orm import Session, relationship
 except ImportError, e:
     print "failed=True msg='`sqlalchemy` library required for this script'"
     sys.exit(1)
