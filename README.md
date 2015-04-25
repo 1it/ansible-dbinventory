@@ -20,6 +20,11 @@ OPTIONAL - for curses interface
 Usage
 =====
 
+
+dbinventory stores data in a sqlite3 database.
+
+
+
 Create the initial database
 ---------------------------
 
@@ -27,16 +32,42 @@ Create the initial database
 dbinventory.py --db-create
 ```
 
-By default, a sqlite3 database is created in {CWD}/.{SCRIPT_NAME}.sqlite3. So,
-for instance, if you rename dbinventory.py to production.py, the database will
-be created as {CWD}/.production.sqlite3
+
+Creates a file named {CWD}/.dbinventory.sqlite3
+
+
+
+
+You may specify the the database location with a **--db-path** 
+argument ,or, through the **DBINVENTORY_PATH** environment variable. E.g.
+
+```
+dbinventory.py --db-create --db-path=/ansible/hosts.sqlite3
+
+-- or --
+
+export DBINVENTORY_PATH="/ansible/hosts.sqlite3" && dbinventory.py --db-create
+```
+
+
+
+**HINT** : 
+
+by default dbinventory  looks for a database file named `{CWD}/.{SCRIPT_NAME}.sqlite3`.
+
+This is important because it allows you to follow [ansible best practices](https://docs.ansible.com/playbooks_best_practices.html).
+ -- __keeping a unique inventory file PER ENVIRONMENT__.  E.g.
  
+ ```sh
+ cp dbinventory.py {production.py,staging.py}
+ ./staging.py --db-create --db-import staging/hosts.json
+ ./production.py --db-create --db-import production/hosts.json
+ 
+ ./staging.py -e
+ # will open management interface for hosts backed by ./staging.sqlite3
+ 
+ ```
 
-You may specify the location of the database by providing **--db-path**, e.g.
-
-```
-dbinventory.py --db-create --db-path=/etc/ansible/hosts.sqlite3
-```
 
 
 Bulk import hosts, vars, and tags from a JSON source
