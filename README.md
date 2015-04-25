@@ -1,6 +1,6 @@
 # ansible-dbinventory
-ansible [dynamic inventory](http://docs.ansible.com/intro_dynamic_inventory.html) script
-providing sqlite3 backed management of hosts and groups through a curses interface.
+dbinbventory is a [ansible dynamic inventory script](http://docs.ansible.com/intro_dynamic_inventory.html)
+that provides an alternative to .ini file editing. It simplifies and speeds up expanding inventories (host and group management) by combining a CLI UI, JSON I/O, and sqlite storage.
 
 
 ![curses interface](docs/screenshots/ansible-dbinventory-npyscreen.png?raw=true)
@@ -19,11 +19,6 @@ OPTIONAL - for curses interface
 
 Usage
 =====
-
-
-dbinventory stores data in a sqlite3 database.
-
-
 
 Create the initial database
 ---------------------------
@@ -88,8 +83,8 @@ dbinventory.py --db-export > /path/to/data.json
 ```
 
 
-Add a host, tag, or tag group
------------------------------
+Manage Hosts
+------------
 
 
 In dbinventory, "Tags" belong to "Tag Groups", and may belong to any number of
