@@ -27,8 +27,12 @@ Create the initial database
 dbinventory.py --db-create
 ```
 
-By default, a sqlite3 database is created in <CWD>/.dbinventory.sqlite3. You may
-specify the location of the database by providing **--db-path**, e.g.
+By default, a sqlite3 database is created in {CWD}/.{SCRIPT_NAME}.sqlite3. So,
+for instance, if you rename dbinventory.py to production.py, the database will
+be created as {CWD}/.production.sqlite3
+ 
+
+You may specify the location of the database by providing **--db-path**, e.g.
 
 ```
 dbinventory.py --db-create --db-path=/etc/ansible/hosts.sqlite3
@@ -140,6 +144,5 @@ Development
 TODO:
 
 * finish tag + group editing
-* do not import [new] duplicates
 * fix height issue 
 * allow reselection of edited host/tag

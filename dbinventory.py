@@ -155,18 +155,18 @@ class BlueAcornInventory(object):
         parser.add_argument('--pretty', '-p', action='store_true', help='Pretty-print results')
         
         
-        parser.add_argument('--db-path', action='store', help='Path to Hosts Database File, defaults to DBINVENTORY_PATH environment variable if set, or "<current working directory>/.dbinventory.sqlite3"')
+        parser.add_argument('--db-path', action='store', help='Path to Hosts Database File, default to DBINVENTORY_PATH environment variable, or "{CWD}/{SCRIPT_NAME}.sqlite3" if not set.')
         
-        parser.add_argument('--db-create', action='store_true', help='When set, attempt to create the database if it does not already exist')
+        parser.add_argument('--db-create', action='store_true', help='When set, attempt to create the database if it does not already exist.')
         parser.add_argument('--db-export', action='store_true', help='Export groups, tags, and hosts as JSON')
         parser.add_argument('--db-import', action='store', help='Pathname to JSON file containing groups, tags, and hosts to import.')
         parser.add_argument('--db-secret', action='store', help='Database Secret Key for host password encryption, defaults to DBINVENTORY_SECRET environment variable')
         
         parser.add_argument('--list', action='store_true', help='List all active Hosts (default: True)')
         parser.add_argument('--host', action='store', help='Get all Ansible inventory variables about a specific Host')
-
+        parser.add_argument('--ssh-config','-c', action='store_true', help='Output hosts in SSH Config format')
         
-        parser.add_argument('--edit','-e', action='store_true', help='Manage Hosts and Tags')
+        parser.add_argument('--edit','-e', action='store_true', help='Manage Hosts and Tags through a curses interface.')
         
         """
         parser.add_argument('--add-group', action='store', help='Add a Tag Group by Name')
@@ -178,7 +178,7 @@ class BlueAcornInventory(object):
         parser.add_argument('--del-tag', action='store', help='Remove a Tag by Name')
         """
         
-        parser.add_argument('--ssh-config','-c', action='store_true', help='Output hosts in SSH Config format')
+        
         
         
         self.args = parser.parse_args()
@@ -194,7 +194,7 @@ class BlueAcornInventory(object):
     def database_initialize(self):
         
         if not hasattr(self, 'db_path'):
-            self.db_path = os.path.dirname(os.path.abspath(__file__)) + '/.dbinventory.sqlite3'  
+            self.db_path = os.path.dirname(os.path.abspath(__file__)) + '/.' + os.path.splitext(os.path.basename(__file__))[0] + '.sqlite3'  
             
         if not os.path.isfile(self.db_path):
             if(self.args.db_create):
