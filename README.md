@@ -83,34 +83,33 @@ dbinventory.py --db-export > /path/to/data.json
 ```
 
 
-Manage Hosts
-------------
+Manage Hosts and Groups
+-----------------------
 
+Hosts and Groups are managed through the JSON I/O arguments, or, a curses interface. E.g.
 
-In dbinventory, "Tags" belong to "Tag Groups", and may belong to any number of
-"Hosts". 
-
-"Tags" are essentially ansible "inventory groups", and "Tag Groups" act
-as a taxonomy to organize tags in the interface (not used by ansible at all).
-
-Tag names must be unique (e.g. you cannot have two tags named "sla" even if 
-they belong to a different Tag Group).
-
-
+```sh
+# spawn the management interface with --edit. requires npycurses library
+dbinventory.py -e
 ```
-db-inventory.py --add-group <Tag Group Name>
-db-inventory.py --add-tag <Tag Name>
-db-inventory.py --add-host <Host>
-```
+
+In dbinventory, think of "tags" as ansible host groups, and "tag groups" used to
+taxonomize tags and coherently present them in the curses interface.
+
 
 SSH Config compatible Output 
 ----------------------------
 
 You may use dbinventory to generate ssh config files as well.
 
-```
+```sh
 db-inventory.py --ssh-config >> ~/.ssh/config
 cat ~/.ssh/config
+```
+
+>>> 
+
+```ssh
 ##### dbinventory hosts #####
 #############################
 
