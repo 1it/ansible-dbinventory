@@ -524,7 +524,7 @@ if UI_ENABLED:
         def __init__(self, *args, **kwargs):
             self.FIELDS = {}
             self.REQUIRED_FIELDS = []
-            super(UI_Form,self).__init__(*args, **kwargs)
+            super(UI_Form,self).__init__(*args, lines=9999, **kwargs)
             
             record = self.get_record()
             if record and record.id:
@@ -607,6 +607,7 @@ if UI_ENABLED:
     class UI_TagForm(UI_Form):
         
         def create(self):
+              
             record = self.get_record()
             self.name = 'Edit Tag' if record.id else 'Add Tag'
             self.add_required_field('name', 'Tag:', npyscreen.TitleText, value=record.name)
@@ -622,8 +623,10 @@ if UI_ENABLED:
                     value.append(idx)
             
             height = min(10, len(group_ids)) + 2
+            
             self.add_required_field('group','Group:',npyscreen.TitleSelectOne,values=group_names,value=value,max_height=height)
-
+            
+            
 
         
         def add_record(self,data):
@@ -638,8 +641,11 @@ if UI_ENABLED:
         
             
     class UI_HostForm(UI_Form):
-        
+
         def create(self):
+            
+            #form_height = 4
+            
             record = self.get_record()
             self.name = 'Edit Host' if record.id else 'Add Host'
             
@@ -667,6 +673,8 @@ if UI_ENABLED:
                 prompt = group.name + ':'
                 height = min(10, len(tags)) + 2
                 
+                #form_height += height
+                
                 value = []
                 for idx, tag in enumerate(tags):
                     if tag in host_tags:
@@ -678,6 +686,20 @@ if UI_ENABLED:
                 else:
                     self.add_field('_tag_group_' + group.name, group.name + ':', npyscreen.TitleMultiSelect, values=tags, value=value, max_height=height)
                 
+                
+                
+                
+            
+            #max_y, max_x = self._max_physical()
+            
+            #if form_height > max_y:
+            #    self.lines = 500
+                
+            #raise Exception("%s %s" % (form_height, max_y))
+            
+            
+            #self.lines=50
+            #self._resize()
                 
         def add_record(self,data):
             
