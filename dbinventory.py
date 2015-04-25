@@ -92,12 +92,14 @@ class BlueAcornInventory(object):
             host = query.filter_by(host=self.args.host).first()
             inventory = self.get_host_vars(host) if host else {}
         else:
-            inventory = {}
+            inventory = {"all": []}
             hostvars = {}
             hostgroups = {}
             for host in query:
                 hostvars[host.host] = self.get_host_vars(host)
                 hostgroups[host.host] = []
+                
+                inventory['all'].append(host.host)
                 
                 for group in [tag.name for tag in host.tags]:
                     if group not in inventory:
