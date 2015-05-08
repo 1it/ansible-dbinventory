@@ -20,7 +20,7 @@ import sys
 import re
 import argparse
 from time import time
-import ConfigParser
+from ConfigParser import SafeConfigParser
 
 try:
     import json
@@ -142,6 +142,16 @@ class BlueAcornInventory(object):
     ###########################################################################
 
     def read_environment(self):
+        ''' Attempt to load from a configuration file '''
+        for fname in [os.path.dirname(os.path.abspath(__file__)) + '/dbinventory.cfg','~/.dbinventory.cfg','/etc/dbinventory.cfg']:
+              if os.path.isfile(fname):
+                parser = SafeConfigParser()
+                parser.read(fname)
+                for section_name in parser.sections():
+                    for name, value in parser.items(section_name):
+                        setattr(self, name, value)
+                break
+        
         ''' Reads the settings from environment variables '''
         # Setup credentials
         if os.getenv("DBINVENTORY_PATH"): self.db_path = os.getenv("DBINVENTORY_PATH")
@@ -150,17 +160,17 @@ class BlueAcornInventory(object):
 
     def read_cli_args(self):
         ''' Command line argument processing '''
-        parser = argparse.ArgumentParser(description='Produce an Ansible Inventory file from an sqlite database')
+        parser = argparse.ArgumentParser(description='simple, database backed management of ansible inventories.')
         
         parser.add_argument('--pretty', '-p', action='store_true', help='Pretty-print results')
         
         
-        parser.add_argument('--db-path', action='store', help='Path to Hosts Database File, default to DBINVENTORY_PATH environment variable, or "{CWD}/{SCRIPT_NAME}.sqlite3" if not set.')
+        parser.add_argument('--db-path', action='store', help='Path to Hosts Database File. Fallback to .cfg definition, DBINVENTORY_PATH environment variable, or {CWD}/{SCRIPT_NAME}.sqlite3 if not set.')
         
-        parser.add_argument('--db-create', action='store_true', help='When set, attempt to create the database if it does not already exist.')
+        parser.add_argument('--db-create', action='store_true', help='Create Host Database File if it does not already exist.')
         parser.add_argument('--db-export', action='store_true', help='Export groups, tags, and hosts as JSON')
         parser.add_argument('--db-import', action='store', help='Pathname to JSON file containing groups, tags, and hosts to import.')
-        parser.add_argument('--db-secret', action='store', help='Database Secret Key for host password encryption, defaults to DBINVENTORY_SECRET environment variable')
+        parser.add_argument('--db-secret', action='store', help='Secret Key used for password encryption. Fallback to .cfg DBINVENTORY_SECRET_FILE definition, or DBINVENTORY_SECRET environment variable')
         
         parser.add_argument('--list', action='store_true', help='List all active Hosts (default: True)')
         parser.add_argument('--host', action='store', help='Get all Ansible inventory variables about a specific Host')
@@ -177,9 +187,6 @@ class BlueAcornInventory(object):
         parser.add_argument('--del-host', action='store', help='Remove a Host by Name')
         parser.add_argument('--del-tag', action='store', help='Remove a Tag by Name')
         """
-        
-        
-        
         
         self.args = parser.parse_args()
 

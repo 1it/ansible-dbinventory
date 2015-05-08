@@ -1,0 +1,14 @@
+#
+# example dbinventory configuration file
+#
+
+# load order:
+# * dbinventory.cfg (in script current working directory)
+# * .dbinventory.cfg (in users home directory)
+# * /etc/dbinventory.cfg
+
+[defaults]
+
+# db_path=/path/to/database.sqlite3
+# db_secret=KeyToUseForEncryption
+
